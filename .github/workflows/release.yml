@@ -67,7 +67,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Stamp version
-        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
       - run: SINGLE=1 npx vite build --outDir dist-single
       - run: cp dist-single/index.html "promptpad-${{ needs.version.outputs.version }}.html"
       - uses: actions/upload-artifact@v4
@@ -93,7 +93,7 @@ jobs:
         shell: bash
         run: |
           v="${{ needs.version.outputs.version }}"
-          npm version "$v" --no-git-tag-version
+          npm version "$v" --no-git-tag-version --allow-same-version
           sed -i "s/^version = \".*\"/version = \"$v\"/" src-tauri/Cargo.toml
           node -e "const f='src-tauri/tauri.conf.json';const j=JSON.parse(require('fs').readFileSync(f,'utf8'));j.version='$v';require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
       - run: npm run build
