@@ -9,7 +9,8 @@ import { gfm, tables, strikethrough } from 'turndown-plugin-gfm';
 export type ToggleKey =
   | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
   | 'paragraphs' | 'inline' | 'links' | 'images'
-  | 'lists' | 'tables' | 'code' | 'mermaid' | 'quotes' | 'rules';
+  | 'lists' | 'tables' | 'code' | 'mermaid' | 'quotes' | 'rules'
+  | 'master'; // master render switch: off shows everything raw without touching the per-type checks
 
 export type Toggles = Record<ToggleKey, boolean>;
 
@@ -19,9 +20,12 @@ export const TOGGLE_KEYS: ToggleKey[] = [
   'lists', 'tables', 'code', 'mermaid', 'quotes', 'rules',
 ];
 
+/** Every persisted key: the per-type toggles plus the master switch. */
+export const ALL_KEYS: ToggleKey[] = [...TOGGLE_KEYS, 'master'];
+
 export function defaultToggles(): Toggles {
   const t = {} as Toggles;
-  for (const k of TOGGLE_KEYS) t[k] = true;
+  for (const k of ALL_KEYS) t[k] = true;
   return t;
 }
 

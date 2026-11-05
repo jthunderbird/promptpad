@@ -1,7 +1,7 @@
 import './style.css';
 import pkg from '../package.json';
 import { Editor } from './editor';
-import { type ToggleKey, TOGGLE_KEYS } from './md';
+import { type ToggleKey, TOGGLE_KEYS, ALL_KEYS } from './md';
 import {
   type Tab, type Workspace, headingLevel, joinBlocks, newBlock, newTab, newWorkspace, parseWorkspace, serializeWorkspace,
 } from './model';
@@ -293,7 +293,7 @@ function applyMerged(res: MergeResult): boolean {
   if (ai < 0) { ai = Math.min(ws.active, next.length - 1); fullRender = true; }
   ws.active = ai;
   if (ws.copyFormat !== res.copyFormat) { ws.copyFormat = res.copyFormat as 'markdown' | 'plain'; changed = true; }
-  for (const k of TOGGLE_KEYS) {
+  for (const k of ALL_KEYS) {
     if (typeof res.toggles[k] === 'boolean' && ws.toggles[k] !== res.toggles[k]) { ws.toggles[k] = res.toggles[k]; fullRender = changed = true; }
   }
   if (namesChanged) renderTabs();
@@ -504,6 +504,7 @@ const MENUS: { name: string; items: Item[] }[] = [
       { label: 'Light theme', radio: () => settings.theme === 'light', keepOpen: true, run: () => { settings.theme = 'light'; saveSettings(); applyTheme(); syncMenus(); } },
       { label: 'Dark theme', radio: () => settings.theme === 'dark', keepOpen: true, run: () => { settings.theme = 'dark'; saveSettings(); applyTheme(); syncMenus(); } },
       { label: 'Match system theme', radio: () => settings.theme === 'system', keepOpen: true, run: () => { settings.theme = 'system'; saveSettings(); applyTheme(); syncMenus(); } },
+      { label: 'Render markdown', key: 'Ctrl+Shift+R', check: () => ws.toggles.master, keepOpen: true, run: () => setToggles(['master'], !ws.toggles.master) },
       { sep: true },
       {
         label: 'Rendering',
@@ -857,6 +858,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '\\') act(() => toggleSidebar());
   else if (k === 'z' && !e.shiftKey) act(() => editor.undo());
   else if (k === 'y' || (k === 'z' && e.shiftKey)) act(() => editor.redo());
+  else if (k === 'r' && e.shiftKey) act(() => setToggles(['master'], !ws.toggles.master));
   else if (k === 'f' && e.shiftKey) act(openFind);
   else if (k === 'f') act(focusTopSearch);
   else if (e.key === 'Tab') act(() => switchTab((ws.active + (e.shiftKey ? ws.tabs.length - 1 : 1)) % ws.tabs.length));

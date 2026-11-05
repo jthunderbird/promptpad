@@ -185,7 +185,7 @@ export class Editor {
 
   private makeHost(b: Block, tok: Tok, idx: number): HTMLElement {
     const key = toggleFor(tok);
-    const rendered = !!key && this.ws.toggles[key] && !this.rawOverride.has(`${b.id}:${idx}`);
+    const rendered = !!key && this.ws.toggles.master && this.ws.toggles[key] && !this.rawOverride.has(`${b.id}:${idx}`);
     const h = document.createElement('div');
     h.className = 'host';
     h.dataset.idx = String(idx);
@@ -714,6 +714,20 @@ export class Editor {
     return r.toString() === '' && !r.cloneContents().querySelector('img');
   }
 
+  /** Enter at the very start of a non-empty block: push it down by inserting an empty block above, caret stays. */
+  private newBlockAbove(b: Block) {
+    this.checkpoint();
+    const tab = this.tab;
+    const at = tab.blocks.indexOf(b);
+    const nb = newBlock('');
+    tab.blocks.splice(at, 0, nb);
+    this.blockEl(b).before(this.renderBlock(nb));
+    this.applyFolds();
+    this.hooks.onChange();
+    this.focusBlock(at, false);
+    // caret goes to the new empty block above so you can type there; the old block moved down
+  }
+
   private newBlockBelow(b: Block, h: HTMLElement) {
     this.checkpoint();
     // trim the trailing blank line the Enter-Enter left behind
@@ -811,6 +825,11 @@ export class Editor {
     }
 
     const rt = raw ? rawText(h) : (h.textContent ?? '');
+    if (type !== 'code' && rt.trim() && this.caretAtStart(h)) {
+      e.preventDefault();
+      this.newBlockAbove(b);
+      return;
+    }
     if (type === 'heading' || (raw && /^ {0,3}#{1,6}(\s|$)/.test(rt) && h.parentElement?.children.length === 1 && !rt.includes('\n'))) {
       e.preventDefault();
       if (this.caretAtEnd(h) || !rt.trim()) this.newBlockBelow(b, h);

@@ -1,6 +1,6 @@
 // Document model: a tab is a list of blocks (text between blank lines; a heading
 // line is always its own block). The workspace file is one readable text file.
-import { type Toggles, defaultToggles, TOGGLE_KEYS } from './md';
+import { type Toggles, defaultToggles, ALL_KEYS } from './md';
 
 export interface Block {
   id: number;
@@ -190,7 +190,7 @@ export function parseWorkspace(src: string): Workspace {
   let header: any = {};
   try { header = JSON.parse(headerLines.join('\n')); } catch { /* defaults */ }
   const toggles = defaultToggles();
-  for (const k of TOGGLE_KEYS) if (typeof header.toggles?.[k] === 'boolean') toggles[k] = header.toggles[k];
+  for (const k of ALL_KEYS) if (typeof header.toggles?.[k] === 'boolean') toggles[k] = header.toggles[k];
   if (!tabs.length) tabs.push(newTab('Prompt 1'));
   return {
     tabs,
