@@ -1,6 +1,6 @@
 // Two promptpad instances sharing one workspace file (fake File System Access API backed by a shared store).
 import { chromium } from 'playwright-core';
-const b = await chromium.launch({ executablePath: process.argv[2], args: ['--no-sandbox'] });
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM || process.argv[2] || undefined, args: ['--no-sandbox'] });
 const store = { text: '', n: 0, writes: 0 };
 let fails = 0; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++; };
 const errs = [];

@@ -59,6 +59,15 @@ node test/sync.mjs <path-to-chromium>         # two instances sharing one file
 node test/merge.test.mjs                      # merge unit tests, no browser
 ```
 
+## Releases
+
+Every push to `main` runs `.github/workflows/release.yml`: type check and all tests, then a Windows build of
+`promptpad.exe` (native MSVC, static runtime) and the single-file `promptpad.html`, published as a GitHub release
+with both attached. The version is `MAJOR.MINOR` from `package.json` plus an automatic patch number (next free
+`v<MAJOR.MINOR>.N` tag, starting at 1), so the first release is `0.0.1`, then `0.0.2`, and so on. To start a new
+line, change `version` in `package.json` (for example `0.1.0`; the next release is `0.1.1`). The release job
+only runs when the tests pass.
+
 ## File format
 
 A `.ppad` file is plain text: a first line `<!--promptpad:workspace TOKEN v1-->`, a JSON header (active tab,

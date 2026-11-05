@@ -1,4 +1,5 @@
 import './style.css';
+import pkg from '../package.json';
 import { Editor } from './editor';
 import { type ToggleKey, TOGGLE_KEYS } from './md';
 import {
@@ -533,7 +534,7 @@ const MENUS: { name: string; items: Item[] }[] = [
   {
     name: 'Help',
     items: [
-      { label: 'About promptpad', run: () => toast('promptpad 0.0.5 spike · MIT · markdown editor for agentic prompts') },
+      { label: 'About promptpad', run: () => toast(`promptpad ${pkg.version} · MIT · markdown editor for agentic prompts`) },
     ],
   },
 ];

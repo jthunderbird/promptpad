@@ -1,6 +1,6 @@
 [package]
 name = "promptpad"
-version = "0.0.5"
+version = "0.0.1"
 description = "Markdown editor for maintaining agentic prompts"
 edition = "2021"
 license = "MIT"

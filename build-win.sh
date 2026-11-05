@@ -12,4 +12,6 @@ docker run --rm -v "$PWD":/app -v promptpad-cargo:/usr/local/cargo/registry -v p
 mkdir -p release
 docker run --rm -v "$PWD":/app -v promptpad-target:/target promptpad-win \
   cp /target/x86_64-pc-windows-msvc/release/promptpad.exe /app/release/promptpad.exe
+# the container runs as root: give the lockfile back to the invoking user
+docker run --rm -v "$PWD":/app promptpad-win chown "$(id -u):$(id -g)" /app/src-tauri/Cargo.lock
 ls -la release/promptpad.exe

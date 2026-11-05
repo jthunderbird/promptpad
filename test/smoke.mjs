@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 const exe = process.argv[2];
 const url = process.argv[3] ?? 'http://localhost:4173/';
-const b = await chromium.launch({ executablePath: exe, args: ['--no-sandbox'] });
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM || exe || undefined, args: ['--no-sandbox'] });
 const ctx = await b.newContext({ viewport: { width: 1100, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] });
 const p = await ctx.newPage();
 const errs = [];

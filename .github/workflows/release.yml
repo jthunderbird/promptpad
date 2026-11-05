@@ -1,0 +1,131 @@
+# On every push to main: test, build promptpad.exe and promptpad.html, and publish them as a GitHub release.
+#
+# Version = MAJOR.MINOR from package.json plus an automatic patch number: the next free patch after the
+# highest existing tag v<MAJOR.MINOR>.*, starting at 1. So the first release is 0.0.1, then 0.0.2, ...
+# To start a new minor or major line, change `version` in package.json (for example to 0.1.0): the next release is 0.1.1.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        run: |
+          base=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          last=$(git tag -l "v${base}.*" | sed "s/^v${base}\.//" | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
+          version="${base}.$(( ${last:-0} + 1 ))"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version}"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: node test/merge.test.mjs
+      - run: npm run build
+      - run: npx playwright-core install --with-deps chromium
+      - name: Browser tests
+        run: |
+          npx vite preview --port 4173 > preview.log 2>&1 &
+          for _ in $(seq 1 30); do curl -sf http://localhost:4173/ > /dev/null && break; sleep 1; done
+          node test/smoke.mjs "" http://localhost:4173/ smoke.png
+          node test/deep.mjs "" deep.png
+          node test/notes.mjs ""
+          node test/notes2.mjs ""
+          node test/sync.mjs ""
+
+  html:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Stamp version
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version
+      - run: SINGLE=1 npx vite build --outDir dist-single
+      - run: cp dist-single/index.html "promptpad-${{ needs.version.outputs.version }}.html"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: html
+          path: promptpad-*.html
+
+  exe:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Stamp version
+        shell: bash
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          npm version "$v" --no-git-tag-version
+          sed -i "s/^version = \".*\"/version = \"$v\"/" src-tauri/Cargo.toml
+          node -e "const f='src-tauri/tauri.conf.json';const j=JSON.parse(require('fs').readFileSync(f,'utf8'));j.version='$v';require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+      - run: npm run build
+      - name: Build exe
+        env:
+          # static C++ runtime: no VC++ redistributable needed; the WebView2 loader is linked in by Tauri
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: npx tauri build --no-bundle
+      - name: Name the exe
+        shell: bash
+        run: cp src-tauri/target/release/promptpad.exe "promptpad-${{ needs.version.outputs.version }}.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: promptpad-*.exe
+
+  release:
+    needs: [version, test, html, exe]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-release
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          ls -la dist-release
+          gh release create "v${v}" dist-release/* \
+            --target "${GITHUB_SHA}" \
+            --title "promptpad ${v}" \
+            --generate-notes

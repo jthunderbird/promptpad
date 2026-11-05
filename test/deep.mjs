@@ -1,5 +1,5 @@
 import { chromium } from 'playwright-core';
-const b = await chromium.launch({ executablePath: process.argv[2], args: ['--no-sandbox'] });
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM || process.argv[2] || undefined, args: ['--no-sandbox'] });
 const ctx = await b.newContext({ viewport: { width: 1100, height: 800 }, permissions: ['clipboard-read', 'clipboard-write'] });
 const p = await ctx.newPage();
 const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type()==='error') errs.push(m.text()); });
