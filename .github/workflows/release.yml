@@ -56,6 +56,7 @@ jobs:
           node test/deep.mjs "" deep.png
           node test/notes.mjs ""
           node test/notes2.mjs ""
+          node test/top.mjs ""
           node test/sync.mjs ""
           node test/update.mjs ""
 

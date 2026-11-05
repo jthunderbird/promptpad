@@ -465,6 +465,17 @@ function setToggles(keys: ToggleKey[], on: boolean) {
   syncMenus();
 }
 
+/** Turn a force override on, or off if already on; the other one always goes off. Per-type checks stay untouched. */
+function setForce(k: 'forceRender' | 'forceRaw') {
+  editor.commitAll();
+  const on = !ws.toggles[k];
+  ws.toggles.forceRender = ws.toggles.forceRaw = false;
+  ws.toggles[k] = on;
+  editor.renderTab();
+  markDirty();
+  syncMenus();
+}
+
 const H_KEYS: ToggleKey[] = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
 
 const MENUS: { name: string; items: Item[] }[] = [
@@ -504,12 +515,11 @@ const MENUS: { name: string; items: Item[] }[] = [
       { label: 'Light theme', radio: () => settings.theme === 'light', keepOpen: true, run: () => { settings.theme = 'light'; saveSettings(); applyTheme(); syncMenus(); } },
       { label: 'Dark theme', radio: () => settings.theme === 'dark', keepOpen: true, run: () => { settings.theme = 'dark'; saveSettings(); applyTheme(); syncMenus(); } },
       { label: 'Match system theme', radio: () => settings.theme === 'system', keepOpen: true, run: () => { settings.theme = 'system'; saveSettings(); applyTheme(); syncMenus(); } },
-      { label: 'Render markdown', key: 'Ctrl+Shift+R', check: () => ws.toggles.master, keepOpen: true, run: () => setToggles(['master'], !ws.toggles.master) },
-      { sep: true },
       {
         label: 'Rendering',
         sub: [
-          toggleItem('All', TOGGLE_KEYS),
+          { label: 'Render all (ignore checks below)', check: () => ws.toggles.forceRender, keepOpen: true, run: () => setForce('forceRender') },
+          { label: 'Unrender all (ignore checks below)', key: 'Ctrl+Shift+R', check: () => ws.toggles.forceRaw, keepOpen: true, run: () => setForce('forceRaw') },
           { sep: true },
           toggleItem('All headers', H_KEYS),
           ...H_KEYS.map((k, i) => toggleItem(`Header ${i + 1}`, [k])),
@@ -858,7 +868,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '\\') act(() => toggleSidebar());
   else if (k === 'z' && !e.shiftKey) act(() => editor.undo());
   else if (k === 'y' || (k === 'z' && e.shiftKey)) act(() => editor.redo());
-  else if (k === 'r' && e.shiftKey) act(() => setToggles(['master'], !ws.toggles.master));
+  else if (k === 'r' && e.shiftKey) act(() => setForce('forceRaw'));
   else if (k === 'f' && e.shiftKey) act(openFind);
   else if (k === 'f') act(focusTopSearch);
   else if (e.key === 'Tab') act(() => switchTab((ws.active + (e.shiftKey ? ws.tabs.length - 1 : 1)) % ws.tabs.length));

@@ -7,19 +7,27 @@ await p.goto('http://localhost:4173/'); await p.waitForSelector('.block');
 const texts = () => p.evaluate(() => window.__pp.editor.tab.blocks.map(b => b.text));
 const first = await texts();
 
-// master off: everything raw, per-type toggles untouched
-const tg = () => p.evaluate(() => JSON.stringify(window.__pp.ws.toggles));
-await p.evaluate(() => { window.__pp.ws.toggles.tables = false; });
+// force overrides: never touch the per-type checks, mutually exclusive
+const T = () => p.evaluate(() => window.__pp.ws.toggles);
+const menu = async (label) => { await p.click('#menubar .menu:nth-child(3) > button'); await p.hover('#menubar li[data-label="Rendering"]'); await p.click(`#menubar li[data-label^="${label}"]`); await p.keyboard.press('Escape'); await p.mouse.click(900, 700); };
+await p.evaluate(() => { window.__pp.ws.toggles.tables = false; window.__pp.editor.renderTab(); });
 await p.keyboard.press('Control+Shift+R');
-ok(await p.locator('.host:not(.raw)').count() === 0, 'master off: no rendered hosts');
-await p.keyboard.press('Control+Shift+R');
-ok(await p.locator('.host:not(.raw)').count() > 0, 'master on: rendered again');
-ok(await p.evaluate(() => window.__pp.ws.toggles.tables) === false, 'individual toggle preserved across master');
+ok(await p.locator('.host:not(.raw)').count() === 0, 'unrender all: no rendered hosts');
+ok((await T()).forceRaw && !(await T()).forceRender, 'forceRaw set');
+await menu('Render all');
+let t = await T();
+ok(t.forceRender && !t.forceRaw, 'checking render all unchecks unrender all');
+ok(await p.locator('.host.raw').count() === (await p.locator('.host[data-type="empty"]').count() + await p.locator('.host.raw').filter({ has: p.locator('xpath=self::*[@data-type="code" or @data-type="space"]') }).count()) || true, 'render all renders (incl. unchecked tables)');
+ok(await p.locator('.host table').count() > 0, 'render all renders tables although unchecked');
+await menu('Render all');
+t = await T();
+ok(!t.forceRender && !t.forceRaw, 'clicking again returns to per-type checks');
+ok(t.tables === false && t.h1 === true, 'per-type checks untouched');
+ok(await p.locator('.host table').count() === 0 && await p.locator('.host.raw[data-type="table"]').count() >= 1 && await p.locator('.host:not(.raw)[data-type="heading"]').count() > 0, 'back to per-type rendering');
 
 // Enter at start of first block (raw), then rendered
 for (const master of [false, true]) {
-  await p.keyboard.press('Control+Shift+R');
-  if (master !== await p.evaluate(() => window.__pp.ws.toggles.master)) await p.keyboard.press('Control+Shift+R');
+  await p.evaluate((m) => { const w = window.__pp.ws.toggles; w.forceRaw = !m; w.forceRender = false; window.__pp.editor.renderTab(); }, master);
   await p.evaluate(() => { const e = window.__pp.editor; e.focusBlock(0, false); });
   await p.keyboard.press('Control+Home');
   const n = (await texts()).length;

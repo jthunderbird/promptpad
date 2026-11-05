@@ -2,7 +2,7 @@
 // editable "host": rendered (contenteditable) when its type toggle is on, raw
 // markdown text (plaintext-only) when off. Edits serialize back token by token.
 import {
-  type Tok, type Toggles, hostToMarkdown, inlineHtml, lexBlock, toggleFor, tokenHtml, toPlainText,
+  type Tok, type Toggles, type ToggleKey, TOGGLE_KEYS, hostToMarkdown, inlineHtml, lexBlock, toggleFor, tokenHtml, toPlainText,
 } from './md';
 import { decodeKey, keyOf } from './merge';
 import {
@@ -183,9 +183,22 @@ export class Editor {
     return h;
   }
 
+  /** Effective render state of a type: the force overrides win over the per-type checks. */
+  private isOn(key: ToggleKey): boolean {
+    const t = this.ws.toggles;
+    return t.forceRaw ? false : t.forceRender ? true : t[key];
+  }
+
+  /** Toggles as the renderers should see them (forceRender turns every inline feature on too). */
+  private eff(): Toggles {
+    const t = this.ws.toggles;
+    if (t.forceRender && !t.forceRaw) return { ...t, ...Object.fromEntries(TOGGLE_KEYS.map((k) => [k, true])) } as Toggles;
+    return t;
+  }
+
   private makeHost(b: Block, tok: Tok, idx: number): HTMLElement {
     const key = toggleFor(tok);
-    const rendered = !!key && this.ws.toggles.master && this.ws.toggles[key] && !this.rawOverride.has(`${b.id}:${idx}`);
+    const rendered = !!key && this.isOn(key) && !this.rawOverride.has(`${b.id}:${idx}`);
     const h = document.createElement('div');
     h.className = 'host';
     h.dataset.idx = String(idx);
@@ -210,7 +223,7 @@ export class Editor {
     } else {
       h.classList.add('rendered', 'k-' + tok.type);
       h.setAttribute('contenteditable', 'true');
-      h.innerHTML = tokenHtml(tok, this.ws.toggles);
+      h.innerHTML = tokenHtml(tok, this.eff());
       // marked wraps paragraphs in <p>; unwrap so the host is the line container
       if (tok.type === 'paragraph' || tok.type === 'heading') {
         const only = h.firstElementChild;
@@ -977,7 +990,7 @@ export class Editor {
     const text = e.clipboardData?.getData('text/plain');
     if (text == null) return;
     e.preventDefault();
-    document.execCommand('insertHTML', false, inlineHtml(text, this.ws.toggles));
+    document.execCommand('insertHTML', false, inlineHtml(text, this.eff()));
   }
 }
 
