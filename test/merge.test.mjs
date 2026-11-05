@@ -1,0 +1,58 @@
+// Unit tests for src/merge.ts. Run: node test/merge.test.mjs  (bundles with rolldown from vite)
+import { build } from 'rolldown';
+import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
+const out = new URL('./.merge.bundle.mjs', import.meta.url).pathname;
+await build({ input: new URL('../src/merge.ts', import.meta.url).pathname, output: { file: out, format: 'esm' }, logLevel: 'silent' });
+const m = await import(pathToFileURL(out).href + '?' + Date.now());
+fs.unlinkSync(out);
+let fails = 0; const eq = (a, b, msg) => { const ok = JSON.stringify(a) === JSON.stringify(b); console.log((ok ? 'PASS ' : 'FAIL ') + msg + (ok ? '' : '\n  got ' + JSON.stringify(a) + '\n  want ' + JSON.stringify(b))); if (!ok) fails++; };
+const k = (t) => m.keyOf(t, false, false);
+const K = (...a) => a.map(k);
+const T = (uid, name, ...keys) => ({ uid, name, keys: K(...keys) });
+const S = (...tabs) => ({ tabs, copyFormat: 'markdown', toggles: { h1: true } });
+
+let r = m.merge3(K('a', 'b', 'c'), K('a', 'b', 'c'), K('a', 'B', 'c'));
+eq(r.out, K('a', 'B', 'c'), 'local unchanged: take remote edit');
+r = m.merge3(K('a', 'b', 'c'), K('a', 'b', 'C'), K('a', 'b', 'c'));
+eq(r.out, K('a', 'b', 'C'), 'remote unchanged: keep local edit');
+r = m.merge3(K('a', 'b', 'c'), K('A', 'b', 'c'), K('a', 'b', 'C'));
+eq(r.out, K('A', 'b', 'C'), 'edits in different blocks both apply');
+r = m.merge3(K('a', 'b', 'c'), K('a', 'x', 'c'), K('a', 'y', 'c'));
+eq(r.out, K('a', 'y', 'x', 'c'), 'same block edited both sides: remote then local copy'); eq(r.conflicts, 1, 'counted as one conflict');
+r = m.merge3(K('a', 'b', 'c'), K('a', 'c'), K('a', 'B', 'c'));
+eq(r.out, K('a', 'B', 'c'), 'local delete vs remote edit: edit wins');
+r = m.merge3(K('a', 'b', 'c'), K('a', 'c'), K('a', 'b', 'c'));
+eq(r.out, K('a', 'c'), 'local delete applies when remote unchanged');
+r = m.merge3(K('a', 'c'), K('a', 'L', 'c'), K('a', 'R', 'c'));
+eq(r.out, K('a', 'R', 'L', 'c'), 'two inserts at same spot: both kept'); eq(r.conflicts, 0, 'not a conflict');
+r = m.merge3([], K('x'), K('y'));
+eq(r.out, K('y', 'x'), 'empty base, both add');
+r = m.merge3(K('a', 'b'), K('a', 'b', ''), K('a', 'b', 'new'));
+eq(r.out, K('a', 'b', 'new', ''), 'empty local placeholder block survives a remote append');
+r = m.merge3(K('a', 'b', 'c', 'd'), K('a', 'b', 'c', 'd'), K('d', 'a', 'b', 'c'));
+eq(r.out.length, 4, 'remote reorder keeps all blocks');
+
+let s = m.mergeSnaps(S(T('1', 'P1', 'a')), S(T('1', 'P1', 'a')), S(T('1', 'P1', 'a', 'b'), T('2', 'P2', 'z')));
+eq(s.tabs.map((t) => [t.uid, t.keys.length]), [['1', 2], ['2', 1]], 'remote new tab and block arrive');
+s = m.mergeSnaps(S(T('1', 'P1', 'a'), T('2', 'P2', 'z')), S(T('1', 'P1', 'a', 'L'), T('2', 'P2', 'z')), S(T('1', 'P1', 'a')));
+eq(s.tabs.map((t) => t.uid), ['1'], 'remote deleted unchanged tab: dropped');
+s = m.mergeSnaps(S(T('1', 'P1', 'a'), T('2', 'P2', 'z')), S(T('1', 'P1', 'a'), T('2', 'P2', 'z', 'mine')), S(T('1', 'P1', 'a')));
+eq(s.tabs.map((t) => t.uid), ['1', '2'], 'remote deleted tab that I edited: kept');
+s = m.mergeSnaps(S(T('1', 'P1', 'a')), S(T('1', 'Mine', 'a')), S(T('1', 'Theirs', 'a')));
+eq(s.tabs[0].name, 'Mine', 'rename both sides: local wins');
+s = m.mergeSnaps(S(T('1', 'P1', 'a')), S(T('1', 'P1', 'a')), S(T('1', 'Theirs', 'a')));
+eq(s.tabs[0].name, 'Theirs', 'remote rename applies');
+s = m.mergeSnaps(S(T('1', 'P1', 'a')), S(T('1', 'P1', 'a'), T('9', 'New', 'n')), S(T('1', 'P1', 'a'), T('8', 'Other', 'o')));
+eq(s.tabs.map((t) => t.uid), ['1', '9', '8'], 'tabs added on both sides both survive');
+s = m.mergeSnaps(S(T('1', 'A'), T('2', 'B')), S(T('1', 'A'), T('2', 'B')), S(T('2', 'B'), T('1', 'A')));
+eq(s.tabs.map((t) => t.uid), ['2', '1'], 'remote tab reorder applies');
+s = m.mergeSnaps(S(T('1', 'A'), T('2', 'B')), S(T('2', 'B'), T('1', 'A')), S(T('1', 'A'), T('2', 'B')));
+eq(s.tabs.map((t) => t.uid), ['2', '1'], 'local tab reorder kept');
+// big, performance sanity
+const base = Array.from({ length: 3000 }, (_, i) => k('blk' + i));
+const loc = base.slice(); loc[100] = k('edit-local');
+const rem = base.slice(); rem[2900] = k('edit-remote'); rem.splice(1500, 0, k('inserted'));
+const t0 = Date.now(); r = m.merge3(base, loc, rem);
+eq([r.out.length, r.out[100], r.out.includes(k('edit-remote')), r.out.includes(k('inserted'))], [3001, k('edit-local'), true, true], '3000 blocks merge correctly in ' + (Date.now() - t0) + 'ms');
+process.exit(fails ? 1 : 0);

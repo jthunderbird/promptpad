@@ -1,0 +1,7 @@
+FROM rust:1-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends clang lld llvm curl ca-certificates pkg-config \
+ && rm -rf /var/lib/apt/lists/* \
+ && for t in llvm-rc llvm-lib llvm-ar llvm-dlltool; do v=$(ls /usr/bin/$t-* 2>/dev/null | head -1); [ -e /usr/bin/$t ] || { [ -n "$v" ] && ln -s "$v" /usr/bin/$t; }; done
+RUN rustup target add x86_64-pc-windows-msvc && cargo install cargo-xwin --locked
+ENV XWIN_CACHE_DIR=/xwin-cache
+WORKDIR /app/src-tauri
