@@ -41,7 +41,7 @@ ok((await p.locator('.host.rendered.k-list').count()) === 0 && (await p.locator(
 ok((await p.locator('.host.rendered.k-table').count()) === 1, 'table still rendered');
 await p.click('#menubar li[data-label="Lists"]');
 ok((await p.locator('.host.rendered.k-list').count()) === 1, 'lists back to rendered');
-await p.keyboard.press('Escape'); await p.mouse.click(600, 600);
+await p.keyboard.press('Escape'); await p.mouse.click(1050, 780);
 
 // copy a block
 await p.locator('.block', { has: p.locator('.k-list') }).first().hover();

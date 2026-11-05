@@ -9,7 +9,7 @@ const first = await texts();
 
 // force overrides: never touch the per-type checks, mutually exclusive
 const T = () => p.evaluate(() => window.__pp.ws.toggles);
-const menu = async (label) => { await p.click('#menubar .menu:nth-child(3) > button'); await p.hover('#menubar li[data-label="Rendering"]'); await p.click(`#menubar li[data-label^="${label}"]`); await p.keyboard.press('Escape'); await p.mouse.click(900, 700); };
+const menu = async (label) => { await p.click('#menubar .menu:nth-child(3) > button'); await p.hover('#menubar li[data-label="Rendering"]'); await p.click(`#menubar li[data-label^="${label}"]`); await p.keyboard.press('Escape'); await p.mouse.click(1050, 780); };
 await p.evaluate(() => { window.__pp.ws.toggles.tables = false; window.__pp.editor.renderTab(); });
 await p.keyboard.press('Control+Shift+R');
 ok(await p.locator('.host:not(.raw)').count() === 0, 'unrender all: no rendered hosts');
