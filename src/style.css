@@ -1,14 +1,14 @@
 :root {
   --bg: #ffffff; --bg2: #f3f4f6; --bg3: #e7e9ee; --fg: #1d2330; --muted: #6b7385;
   --border: #d9dce3; --accent: #2f6fe4; --accent-bg: #e6eefc; --code-bg: #f4f5f8;
-  --hover: #eceef3; --shadow: 0 6px 24px rgba(0,0,0,.14); --done: #8a93a6;
+  --hover: #eceef3; --shadow: 0 6px 24px rgba(0,0,0,.14); --done: #8a93a6; --ok: #1a7f37;
   --font: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --mono: "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
 }
 :root[data-theme="dark"] {
   --bg: #1b1d23; --bg2: #23262e; --bg3: #2c303a; --fg: #e3e6ee; --muted: #8e97aa;
   --border: #373b47; --accent: #6ea0ff; --accent-bg: #26334f; --code-bg: #14161b;
-  --hover: #2d313c; --shadow: 0 6px 24px rgba(0,0,0,.5); --done: #6c7488;
+  --hover: #2d313c; --shadow: 0 6px 24px rgba(0,0,0,.5); --done: #6c7488; --ok: #3fb950;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font); }
@@ -144,3 +144,5 @@ body.readonly #doc { opacity: .75; }
 #topres[hidden] { display: none; }
 #topres .hit.cur { background: var(--accent-bg); }
 .act.del-sec:hover { color: #d1453b; }
+
+.menu > button .upd { color: var(--ok); font-weight: 600; }
