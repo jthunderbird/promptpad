@@ -72,12 +72,12 @@ app.innerHTML = `
 const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
 
 // ---------- helpers ----------
-function toast(msg: string) {
+function toast(msg: string, ms = 1800) {
   const t = $('#toast');
   t.textContent = msg;
   t.hidden = false;
   clearTimeout((toast as any)._t);
-  (toast as any)._t = setTimeout(() => (t.hidden = true), 1800);
+  (toast as any)._t = setTimeout(() => (t.hidden = true), ms);
 }
 
 function applyTheme() {
@@ -448,7 +448,7 @@ async function exportMd() {
 // ---------- menus ----------
 type Item =
   | { sep: true }
-  | { label: string; key?: string; run?: () => void; check?: () => boolean; radio?: () => boolean; keepOpen?: boolean; sub?: Item[]; disabled?: () => boolean };
+  | { label: string; key?: string; run?: () => void; check?: () => boolean; radio?: () => boolean; keepOpen?: boolean; sub?: Item[]; disabled?: () => boolean; hidden?: () => boolean; text?: () => string };
 
 const toggleItem = (label: string, keys: ToggleKey[]): Item => ({
   label,
@@ -534,10 +534,26 @@ const MENUS: { name: string; items: Item[] }[] = [
   {
     name: 'Help',
     items: [
+      { label: 'Check for updates…', run: () => void manualUpdateCheck() },
+      { label: 'Update now', text: () => `Update to ${update?.version ?? ''} now`, hidden: () => !update, run: () => void installUpdate() },
+      { sep: true },
       { label: 'About promptpad', run: () => toast(`promptpad ${pkg.version} · MIT · markdown editor for agentic prompts`) },
     ],
   },
 ];
+
+let helpBtn: HTMLButtonElement | null = null;
+
+function setHelpLabel() {
+  if (!helpBtn) return;
+  helpBtn.textContent = 'Help';
+  if (update) {
+    const span = document.createElement('span');
+    span.className = 'upd';
+    span.textContent = ' (Update available)';
+    helpBtn.appendChild(span);
+  }
+}
 
 function buildMenus() {
   const bar = $('#menubar');
@@ -583,6 +599,7 @@ function buildMenus() {
     wrap.className = 'menu';
     const btn = document.createElement('button');
     btn.textContent = m.name;
+    if (m.name === 'Help') helpBtn = btn;
     wrap.appendChild(btn);
     wrap.appendChild(build(m.items));
     btn.onclick = (e) => {
@@ -607,6 +624,8 @@ function syncMenus() {
     const it = (li as any)._item as Item | undefined;
     if (!it || 'sep' in it) return;
     const mark = li.querySelector('.mark')!;
+    if (it.hidden) li.style.display = it.hidden() ? 'none' : '';
+    if (it.text) li.querySelector('.lab')!.textContent = it.text();
     if (it.check) mark.textContent = it.check() ? '✓' : '';
     else if (it.radio) mark.textContent = it.radio() ? '●' : '';
   });
@@ -722,6 +741,74 @@ function focusTopSearch() {
   runTopSearch();
 }
 
+// ---------- updates ----------
+// The exe checks GitHub for a newer release at start. "Update now" downloads the new exe, swaps it in
+// for the running one (Windows allows renaming a running exe) and restarts; the workspace is saved first.
+const LATEST_API = 'https://api.github.com/repos/jthunderbird/promptpad/releases/latest';
+const RELEASES_PAGE = 'https://github.com/jthunderbird/promptpad/releases/latest';
+let update: { version: string; url: string } | null = null;
+let fetchLatest: () => Promise<any> = async () => {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(LATEST_API, { headers: { Accept: 'application/vnd.github+json' }, signal: ctl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(timer); }
+};
+
+const versionParts = (v: string): number[] | null => {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(v);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+};
+const isNewer = (a: number[], b: number[]) => {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false;
+};
+
+/** Ask GitHub for the latest release. 'newer' also sets `update` and the Help label. */
+async function checkUpdate(auto: boolean, force = false): Promise<'newer' | 'current' | 'error'> {
+  if (auto && !P.isTauri && !force) return 'current'; // the browser build does not self-check
+  try {
+    const rel = await fetchLatest();
+    const tag = String(rel.tag_name ?? '');
+    const asset = (rel.assets ?? []).find((a: any) => /^promptpad-.*\.exe$/.test(a.name));
+    const next = versionParts(tag);
+    const cur = versionParts(pkg.version);
+    if (next && cur && asset && isNewer(next, cur)) {
+      update = { version: tag.replace(/^v/, ''), url: String(asset.browser_download_url) };
+      setHelpLabel();
+      syncMenus();
+      return 'newer';
+    }
+    update = null;
+    setHelpLabel();
+    syncMenus();
+    return 'current';
+  } catch { return 'error'; }
+}
+
+async function manualUpdateCheck() {
+  toast('Checking for updates…');
+  const r = await checkUpdate(false);
+  if (r === 'newer') void installUpdate();
+  else if (r === 'current') toast(`You are on the latest version (${pkg.version})`);
+  else toast("Couldn't reach GitHub to check for updates", 3000);
+}
+
+async function installUpdate() {
+  if (!update) return;
+  if (!P.isTauri) { window.open(RELEASES_PAGE, '_blank', 'noopener'); return; }
+  if (ws.dirty && !ws.path) { toast('Save your workspace first (File > Save workspace as…), then update', 4000); return; }
+  const ok = await P.confirmDialog(
+    `Update promptpad ${pkg.version} to ${update.version}?\n\nIt downloads the new exe, replaces this one and restarts. Your workspace is saved first and reopens afterwards.`,
+    'Update', 'Cancel');
+  if (!ok) return;
+  if (ws.path) await saveWorkspace(false);
+  toast('Downloading update…', 60000);
+  try { await P.applyUpdate(update.url); } catch (e) { toast('Update failed: ' + String(e), 6000); }
+}
+
 // ---------- wiring ----------
 editor = new Editor($('#doc'), ws, {
   onChange: () => { markDirty(); if (!$('#sidebar').hidden) refreshSideDebounced(); },
@@ -781,6 +868,8 @@ void P.onCloseRequested(async () => {
   return P.confirmDialog('This workspace has unsaved changes. Quit without saving?', 'Quit', 'Cancel');
 }, () => ws.dirty);
 
+setTimeout(() => void checkUpdate(true), 3000);
+
 (async function start() {
   editor.dark = false;
   applyTheme();
@@ -817,4 +906,4 @@ void P.onCloseRequested(async () => {
 })();
 
 
-(window as any).__pp = { get ws() { return ws; }, editor, setWriter: (w: typeof writer) => { writer = w; }, saveWorkspace, pullNow: () => serial(pullIfChanged), snapStr: () => snapString(fileSnap(ws)), setPath: (p: string) => { ws.path = p; }, serializeWorkspace, parseWorkspace, joinBlocks };
+(window as any).__pp = { get ws() { return ws; }, editor, setWriter: (w: typeof writer) => { writer = w; }, saveWorkspace, pullNow: () => serial(pullIfChanged), snapStr: () => snapString(fileSnap(ws)), setPath: (p: string) => { ws.path = p; }, serializeWorkspace, parseWorkspace, joinBlocks, checkUpdate, isNewer, versionParts, setFetchLatest: (f: typeof fetchLatest) => { fetchLatest = f; } };

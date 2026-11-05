@@ -56,8 +56,18 @@ node test/deep.mjs <path-to-chromium> out.png # tables, lists, bold, mermaid, th
 node test/notes.mjs <path-to-chromium>        # header levels, list Enter, autosave
 node test/notes2.mjs <path-to-chromium>       # search box, delete header
 node test/sync.mjs <path-to-chromium>         # two instances sharing one file
+node test/update.mjs <path-to-chromium>       # update check, Help label
 node test/merge.test.mjs                      # merge unit tests, no browser
+rustc --edition 2021 --test src-tauri/src/update.rs -o /tmp/ut && /tmp/ut   # self-update file swap
 ```
+
+## Updating
+
+The exe checks GitHub for a newer release a few seconds after start. When one exists the menu reads
+**Help (Update available)**; Help > Update to x.y.z now downloads the new exe, replaces the running one
+(Windows lets a running exe be renamed) and restarts. The workspace is saved first and reopens afterwards.
+Help > Check for updates checks on demand. Only exe assets of this repository's releases are accepted. The
+exe must live in a folder you can write to.
 
 ## Releases
 

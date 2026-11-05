@@ -44,6 +44,8 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: node test/merge.test.mjs
+      - name: Update helper tests
+        run: rustc --edition 2021 --test src-tauri/src/update.rs -o /tmp/update-tests && /tmp/update-tests
       - run: npm run build
       - run: npx playwright-core install --with-deps chromium
       - name: Browser tests
@@ -55,6 +57,7 @@ jobs:
           node test/notes.mjs ""
           node test/notes2.mjs ""
           node test/sync.mjs ""
+          node test/update.mjs ""
 
   html:
     needs: version
@@ -96,6 +99,12 @@ jobs:
           npm version "$v" --no-git-tag-version --allow-same-version
           sed -i "s/^version = \".*\"/version = \"$v\"/" src-tauri/Cargo.toml
           node -e "const f='src-tauri/tauri.conf.json';const j=JSON.parse(require('fs').readFileSync(f,'utf8'));j.version='$v';require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+      - name: Update helper tests (includes renaming a running exe)
+        shell: bash
+        run: |
+          cd src-tauri
+          rustc --edition 2021 --test src/update.rs -o update-tests.exe
+          ./update-tests.exe
       - run: npm run build
       - name: Build exe
         env:

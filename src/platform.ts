@@ -161,3 +161,8 @@ export async function exitApp() {
     await getCurrentWindow().close();
   } else window.close();
 }
+
+/** Download the exe at `url`, replace the running exe with it and restart (Windows exe only). */
+export async function applyUpdate(url: string): Promise<void> {
+  await invoke('apply_update', { url });
+}
