@@ -10,71 +10,80 @@ const st = fake.st;
 st.addRepo('alice/context', true);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const reviewer = `# Role
+const side = `# Recipe Box
 
-You are a careful senior code reviewer. You read a diff and report only what matters.
+<!--pp:copied-->
+- fix the shopping list so duplicate ingredients merge ("2 eggs" plus "3 eggs" should be "5 eggs")
+- the recipe photo sometimes shows sideways on my phone
 
-## Rules
+## import from a link
 
-- flag bugs and security problems first
-- never rewrite code that already works
-- ask a question when intent is unclear
-- Review the diff below under three sentences
+Let me paste a recipe URL and import it. Look at how recipes are parsed today and plan the work first. Do not write code yet.
 
-## Output format
+## offline mode
 
-| Severity | When to use it |
+- open the app and show saved recipes with no connection
+- queue edits and sync them when the connection comes back
+
+# Garden Tracker
+
+Time to add watering reminders. Requirements:
+- remind per plant, not per bed
+- quiet hours from 9pm to 7am
+- a snooze button that does not lose the reminder
+
+| Plant | Water every |
 | --- | --- |
-| blocker | wrong result, data loss, security hole |
-| suggestion | clearer or safer, but works today |
-| nit | taste only (skip unless asked) |
+| tomatoes | 2 days |
+| herbs | 3 days |
+| succulents | 14 days |
 
-## Example
+## notes for later
 
-\`\`\`markdown
-**blocker** \`invoice.go:42\`: the retry loop never stops on a 4xx, so a bad request is sent forever.
-\`\`\`
-
-## Context
-
-Review the diff below. The service is a Go billing API; the public API must not change.
+Check whether a rain forecast should skip a reminder.
 `;
-const notes = `# Release notes writer
+const work = `# Billing service
 
-Turn the merged pull requests into friendly release notes.
+<!--pp:copied-->
+Add retry handling to the invoice sender:
+- retry up to 3 times with exponential backoff
+- never retry on 4xx errors
+- log every attempt with the invoice id
 
-## Tone
+## constraints
 
-Plain words. Lead with what the user can now do. No internal ticket numbers.
+Keep the public API unchanged and do not touch the database schema.
 
-## Sections
+## still to write up
 
-- **New**
-- **Better**
-- **Fixed**
+- release notes for the retry change, in plain words
+- a short runbook: what to do when invoices pile up
+
+# Onboarding docs
+
+Rewrite the setup guide for a brand-new laptop. Keep it under one page.
 `;
-const triage = `# Bug triage
+const lab = `# Media server
 
-Read the report and decide who should look at it first.
+- move the photo library to the new disk and keep the folder structure
+- set up nightly backups and tell me when one fails
 
-## Steps
+## questions
 
-1. Reproduce the report from the text alone.
-2. Name the component.
-3. Give a severity and one sentence of why.
+Which is better for this box: a plain NAS share or a small media server? Give me a short comparison before I decide.
 `;
 const tok = 'pp9f3a1c';
 const ppad = JSON.stringify;
 const file = `<!--promptpad:workspace ${tok} v1-->
-${ppad({ version: 1, copyFormat: 'markdown', toggles: {}, remote: { repo: 'alice/context', branch: 'promptpad', path: 'agents.ppad' } }, null, 1)}
-<!--promptpad:tab ${tok} ${ppad({ name: 'Code reviewer', id: 't-review' })}-->
-${reviewer}
-<!--promptpad:tab ${tok} ${ppad({ name: 'Release notes', id: 't-notes' })}-->
-${notes}
-<!--promptpad:tab ${tok} ${ppad({ name: 'Bug triage', id: 't-triage' })}-->
-${triage}`;
+${ppad({ version: 1, copyFormat: 'markdown', toggles: {}, remote: { repo: 'alice/context', branch: 'promptpad', path: 'prompts.ppad' } }, null, 1)}
+<!--promptpad:tab ${tok} ${ppad({ name: 'Side projects', id: 't-side' })}-->
+${side}
+<!--promptpad:tab ${tok} ${ppad({ name: 'Work', id: 't-work' })}-->
+${work}
+<!--promptpad:tab ${tok} ${ppad({ name: 'Home lab', id: 't-lab' })}-->
+${lab}`;
 st.repos.get('alice/context').branches.set('promptpad', { commits: [{ message: 'create', parents: [], author: 'alice' }], files: new Map() });
-st.setFile('alice/context', 'promptpad', 'agents.ppad', file, 'alice');
+st.setFile('alice/context', 'promptpad', 'prompts.ppad', file, 'alice');
 
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM || process.argv[2] || undefined, args: ['--no-sandbox'] });
 const URL_ = 'http://localhost:4173/';
@@ -95,7 +104,7 @@ async function openFromGitHub(p) {
   await p.waitForSelector('input[placeholder="owner/name"]');
   await p.fill('input[placeholder="owner/name"]', 'alice/context');
   await p.click('.modal button:has-text("List files")');
-  await p.click('.modal button.file:has-text("agents.ppad")');
+  await p.click('.modal button.file:has-text("prompts.ppad")');
   await p.waitForSelector('.modal', { state: 'detached' });
   await p.waitForFunction(() => document.querySelector('#syncbar')?.innerText.includes('synced'));
 }
@@ -117,11 +126,10 @@ await shot(S, 'signin');
 await S.close();
 
 await openFromGitHub(A);
-await A.locator('.block:has-text("flag bugs")').first().scrollIntoViewIfNeeded();
-// copy a few blocks: they turn into gray "sent" lines
-for (const t of ['You are a careful senior code reviewer', 'flag bugs and security']) {
-  const blk = A.locator(`.block:has-text("${t}")`).first();
-  await blk.hover(); await blk.locator('.act.copy').first().click(); await sleep(150);
+// copy one more block by clicking, like in real use: it grays out
+{
+  const blk = A.locator('.block:has-text("Look at how recipes are parsed")').first();
+  await blk.hover(); await blk.locator('.act.copy').first().click(); await sleep(200);
 }
 await A.evaluate(() => document.querySelector('#scroller').scrollTo(0, 0));
 await A.mouse.move(900, 600);
@@ -129,7 +137,7 @@ await sleep(300);
 await shot(A, 'hero');
 
 // folded sections
-await A.evaluate(() => document.querySelectorAll('.block.is-heading .chev').forEach((c, i) => { if (i > 0 && i < 4) c.click(); }));
+await A.evaluate(() => document.querySelectorAll('.block.is-heading').forEach((b) => { if (b.querySelector('h2')) b.querySelector('.chev').click(); }));
 await sleep(200);
 await shot(A, 'folding');
 await A.evaluate(() => document.querySelectorAll('.block.folded.is-heading .chev').forEach((c) => c.click()));
@@ -174,12 +182,13 @@ await openFromGitHub(M);
 await sleep(300);
 await shot(M, 'phone');
 // edit on the laptop, show it arrive on the phone
-await A.locator('.block:has-text("Review the diff below")').first().click();
+await A.locator('.block:has-text("Check whether a rain forecast")').first().click();
 await A.keyboard.press('End');
-await A.keyboard.type(' Be kind. (added on the laptop)');
+await A.keyboard.type(' Also remind me before a trip. (added on the laptop)');
 await M.waitForFunction(() => document.body.innerText.includes('added on the laptop'), null, { timeout: 15000 });
 await sleep(300);
-await M.evaluate(() => document.activeElement?.blur?.()).catch(() => {});
+await M.evaluate(() => { const e = [...document.querySelectorAll('.host')].find((x) => x.textContent.includes('added on the laptop')); e?.scrollIntoView({ block: 'center' }); document.activeElement?.blur?.(); });
+await sleep(500);
 await shot(M, 'phone-synced');
 await shot(A, 'laptop-synced');
 await b.close(); fake.close?.();
