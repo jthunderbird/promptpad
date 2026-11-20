@@ -1,5 +1,6 @@
 // GitHub sync UI: the sync bar in the menu bar, the sign-in dialog and the open / save-to-GitHub dialogs.
 import * as gh from './gh';
+import { DEFAULT_CLIENT_ID } from './gh';
 import * as P from './platform';
 import type { Link } from './model';
 import type { Sync } from './sync';
@@ -81,12 +82,12 @@ export function showSignIn(sync: Sync, done: (ok: boolean) => void) {
     // browser (device flow)
     const status = el('div', { class: 'muted small' });
     const codeBox = el('div', { class: 'code', hidden: true });
-    const idIn = el('input', { type: 'text', placeholder: 'GitHub App client id', value: gh.cfg.clientId, spellcheck: false });
+    const idIn = el('input', { type: 'text', placeholder: 'OAuth App client id', value: gh.cfg.clientId, spellcheck: false });
     const go = el('button', { class: 'primary', type: 'button' }, 'Sign in with browser');
     go.onclick = async () => {
       showErr(err, '');
       const id = idIn.value.trim();
-      if (!id) { showErr(err, 'Browser sign-in needs the client id of a GitHub App (see the README). You can paste a token below instead.'); return; }
+      if (!id) { showErr(err, 'Browser sign-in needs the client id of promptpad\'s GitHub OAuth App (see the README). You can paste a token below instead.'); return; }
       try { localStorage.setItem('promptpad.ghClientId', id); } catch { /* ignore */ }
       go.disabled = true;
       try {
@@ -118,8 +119,8 @@ export function showSignIn(sync: Sync, done: (ok: boolean) => void) {
     };
     box.append(
       el('div', { class: 'sec' }, 'Browser'),
-      el('p', { class: 'small' }, 'Opens GitHub, where you approve promptpad. No password or token is typed here.'),
-      field('Client id', idIn),
+      el('p', { class: 'small' }, 'Opens GitHub, where you approve promptpad (access to your repositories, so it can read and write the workspace file). No password or token is typed here.'),
+      ...(DEFAULT_CLIENT_ID ? [] : [field('Client id', idIn)]),
       go, codeBox, status,
     );
 
@@ -143,7 +144,7 @@ export function showSignIn(sync: Sync, done: (ok: boolean) => void) {
     mk.onclick = () => void P.openUrl(`${gh.cfg.web}/settings/personal-access-tokens/new`);
     box.append(
       el('div', { class: 'sec' }, 'Or paste a personal access token'),
-      el('p', { class: 'small' }, 'A fine-grained token limited to your repo with "Contents: Read and write" is enough. It is stored in the Windows credential store.'),
+      el('p', { class: 'small' }, 'A fine-grained token limited to your repo with "Contents: Read and write" is enough, or a classic token with the repo scope. It is stored in the Windows credential store.'),
       field('Token', tok), el('div', { class: 'row' }, use, mk),
       err,
     );

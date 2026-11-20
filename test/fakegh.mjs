@@ -42,6 +42,7 @@ export function startFake(port = 4599) {
       try { j = body ? JSON.parse(body) : {}; } catch { /* ignore */ }
 
       // device flow (no auth)
+      if (p === '/login/device/code') { st.deviceScope = j.scope; st.deviceClient = j.client_id; }
       if (p === '/login/device/code') return send(200, { device_code: 'dev123', user_code: 'ABCD-1234', verification_uri: 'http://localhost:' + port + '/login/device', interval: 1, expires_in: 60 });
       if (p === '/login/oauth/access_token') {
         st.devicePolls++;

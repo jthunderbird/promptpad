@@ -8,12 +8,14 @@ const LS = (k: string) => { try { return localStorage.getItem(k) ?? ''; } catch 
 export const cfg = {
   get api() { return (LS('promptpad.ghApi') || 'https://api.github.com').replace(/\/$/, ''); },
   get web() { return (LS('promptpad.ghWeb') || 'https://github.com').replace(/\/$/, ''); },
-  /** Client id of the promptpad GitHub App (public value). Can be set in the sign-in dialog. */
+  /** Client id of the promptpad OAuth App (public value); a stored override wins (used by tests). */
   get clientId() { return LS('promptpad.ghClientId') || DEFAULT_CLIENT_ID; },
+  /** Permission asked for at sign-in: repository contents (an OAuth App has no narrower scope for private repos). */
+  scope: 'repo',
 };
 
-/** Public client id of the registered GitHub App used for browser sign-in. Empty until one is registered. */
-export const DEFAULT_CLIENT_ID = '';
+/** Public client id of promptpad's GitHub OAuth App (device flow enabled). Not a secret. */
+export const DEFAULT_CLIENT_ID = 'Ov23lijDhZWpORmuzEjk';
 
 export type ErrKind = 'auth' | 'conflict' | 'notfound' | 'network' | 'http';
 export class GhError extends Error {
@@ -150,7 +152,7 @@ async function postJson(url: string, body: unknown): Promise<any> {
 }
 
 export async function deviceStart(clientId: string): Promise<DeviceCode> {
-  const j = await postJson(`${cfg.web}/login/device/code`, { client_id: clientId });
+  const j = await postJson(`${cfg.web}/login/device/code`, { client_id: clientId, scope: cfg.scope });
   if (!j.device_code) throw new GhError('http', 0, j.error_description || j.error || 'Sign-in could not start');
   return j;
 }

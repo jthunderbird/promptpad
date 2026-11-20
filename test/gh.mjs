@@ -194,12 +194,11 @@ await C.close();
 // ---- browser sign-in (device flow) ----
 const D = await mk('D');
 await menu(D, 'Sign in to GitHub…');
-await D.click('.modal button:has-text("Sign in with browser")');
-ok(await D.locator('.modal .err').innerText().then((t) => /client id/i.test(t)), 'browser sign-in without a client id explains what is needed');
-await D.fill('.modal input[placeholder="GitHub App client id"]', 'Iv1.test');
+ok(await D.locator('.modal input[placeholder="OAuth App client id"]').count() === 0, 'client id is built in: no field to fill');
 await D.click('.modal button:has-text("Sign in with browser")');
 ok(await until(async () => (await D.locator('.modal .code').innerText()) === 'ABCD-1234', 5000), 'shows the user code');
 await D.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
+ok(st.deviceScope === 'repo' && st.deviceClient === 'Ov23lijDhZWpORmuzEjk', 'sign-in asks for the repo scope with the built-in client id');
 await D.click('#menubar .menu:nth-child(1) > button');
 ok(await D.locator('#menubar li[data-label="Sign out of GitHub"]').innerText().then((t) => t.includes('alice')), 'device flow signed in as alice');
 await D.keyboard.press('Escape'); await D.mouse.click(1050, 780);

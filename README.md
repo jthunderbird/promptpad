@@ -76,8 +76,8 @@ Sync is opt-in: a workspace that is not linked works exactly as before. A linked
 target (`repo`, `branch`, `path`) in its own header, so any machine that opens the file knows where it syncs.
 
 - **Sign in.** File > Sign in to GitHub. Either *Sign in with browser* (GitHub device flow: you get a code,
-  GitHub opens, you approve) or paste a personal access token (fine-grained, your repo, Contents read and
-  write). The token is kept in the Windows credential store.
+  GitHub opens, you approve) or paste a personal access token (fine-grained with Contents read and write on
+  your repo, or a classic token with `repo`). The token is kept in the Windows credential store.
 - **Create / open.** File > Save to GitHub (repo, branch, file name) and File > Open from GitHub. The suggested
   branch is `promptpad`; everyone using promptpad files in a repo can share that one branch.
 - **What syncs.** Tabs, blocks, the copied flag, copy format and render toggles. The active tab and folded
@@ -86,10 +86,11 @@ target (`repo`, `branch`, `path`) in its own header, so any machine that opens t
   Edits made offline are kept and merged after a restart.
 - **Prompts are committed to git.** Anyone with access to the repo can read them and the history. Do not keep
   secrets in prompts; the bar warns loudly about public repos.
-- **Browser sign-in needs a GitHub App client id.** Register a GitHub App once (Settings > Developer
-  settings > GitHub Apps; enable *Device flow*, give it Repository permission *Contents: Read and write*, no
-  webhook), install it on the repos you use, and put its client id in `DEFAULT_CLIENT_ID` in `src/gh.ts` (or
-  type it once in the sign-in dialog). Without one, use the token option.
+- **Browser sign-in** uses promptpad's GitHub OAuth App (public client id built into `src/gh.ts`, device flow
+  enabled). It asks for the `repo` scope, because an OAuth App has no narrower permission for private repos;
+  use a fine-grained token limited to one repo if you want less. To run your own build under another
+  account, register an OAuth App (Settings > Developer settings > OAuth Apps, tick *Enable Device Flow*) and
+  replace `DEFAULT_CLIENT_ID`. Never put a client secret in the app; device flow does not use one.
 
 ## Updating
 
