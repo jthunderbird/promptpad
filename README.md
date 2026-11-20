@@ -1,6 +1,6 @@
 # promptpad
 
-**Get your AI prompts ready before you send them.** promptpad is where the prompts you have not sent yet live: one tab per project (or group of projects), a block per task, editable until the moment you copy it into your AI chat. Then it keeps all of that in sync between your laptop, your work machine and your phone, through a private branch on your own GitHub.
+**Get your AI prompts ready before you send them.** promptpad is where the prompts you have not sent yet live: one tab per project (or group of projects), a block per task, editable until the moment you copy it into your AI chat. Then it keeps all of that in sync between your laptop, your work machine and your phone or any other Windows/Android device, through a private branch on your own GitHub.
 
 ![A promptpad tab: a rendered diagram above the raw prompt that will go to the agent; a prompt that was already sent is a gray line](docs/img/hero.png)
 
@@ -18,7 +18,7 @@ promptpad is in beta. It works, it is used daily, and it will keep changing.
 
 ## How people use it
 
-You are working with an AI coding agent on several things at once, and ideas for the next prompt show up at odd moments: in the car, in a meeting, halfway through reviewing the last answer. promptpad is the place to catch them, polish them, and send them when they are ready.
+You are working with an AI coding agent on several things at once, and ideas for the next feature show up at odd moments: in the car, in a meeting, halfway through reviewing the last answer. promptpad is the place to catch them, polish them, and send them when they are ready.
 
 - **A tab is a project, or a group of projects.** One tab for your side projects, one for work, one for the home lab.
 - **A heading is a project or a topic** inside the tab: `# Recipe Box`, then `## import from a link`, `## offline mode`.
@@ -66,8 +66,6 @@ Edits are sent when you pause typing and again whenever you leave the app, so sw
 
 <img src="docs/img/phone-synced.png" alt="The same workspace on a phone-sized screen, with an edit that was just typed on the laptop" width="240">
 
-*(This picture is a phone-sized browser window, not a photo of a device.)*
-
 ### Working with a team
 
 Several people can share one file, and the merge is by block, so two people adding different prompts at the same time do not clobber each other. promptpad assumes what a good team does anyway: one person works on a given prompt at a time. If you edit a prompt that someone else just sent (or the other way round), promptpad keeps both versions and shows a conflict chip instead of quietly picking one. That is on purpose: it means your workflow overlapped.
@@ -94,7 +92,7 @@ Turn on **View > Show blame** and every block shows who last changed it and when
 ## Also handy
 
 - **A workspace is one plain text file** (`.ppad`) holding all your tabs. Easy to back up and compare.
-- **Several windows, one file.** Open the same file twice, even on a network share, and the changes merge.
+- **Several windows, one file.** Open the same file twice (not GitHub), even on a network share, and the changes merge.
 - **Import and export** plain `.md` files, and choose whether the copy button gives markdown or plain text.
 - **Self-updating**: promptpad tells you when a new version is out and installs it for you.
 
