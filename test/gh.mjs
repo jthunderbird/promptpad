@@ -205,7 +205,7 @@ ok((await D.evaluate(() => window.__opened.join())).includes('/login/device'), '
 await D.waitForSelector('.modal', { state: 'detached', timeout: 15000 });
 ok(st.deviceScope === 'repo' && st.deviceClient === 'Ov23lijDhZWpORmuzEjk', 'sign-in asks for the repo scope with the built-in client id');
 await D.click('#menubar .menu:nth-child(1) > button');
-ok(await D.locator('#menubar li[data-label="Sign out of GitHub"]').innerText().then((t) => t.includes('alice')), 'device flow signed in as alice');
+ok(await D.locator('#menubar li[data-label="Sign out of GitHub"]').innerText().then((t) => t.includes('alice')), 'device flow signed in as alice (survived one dropped connection)');
 await D.keyboard.press('Escape'); await D.mouse.click(1050, 780);
 await menu(D, 'Sign out of GitHub');
 await D.click('#menubar .menu:nth-child(1) > button');

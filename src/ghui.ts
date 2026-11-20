@@ -106,12 +106,20 @@ export function showSignIn(sync: Sync, done: (ok: boolean) => void) {
         go.replaceWith(el('div', { class: 'row' }, copy, cont));
         status.textContent = 'Copy the code, then continue to GitHub and enter it there. Waiting for approval…';
         let wait = Math.max(1, dc.interval || 5) * 1000;
+        let netFails = 0;
         const deadline = Date.now() + dc.expires_in * 1000;
         while (!cancelled && Date.now() < deadline) {
           // also check right away when the user comes back from GitHub
-          await new Promise<void>((r) => { const t = setTimeout(done2, wait); const v = () => { if (!document.hidden) done2(); }; function done2() { clearTimeout(t); document.removeEventListener('visibilitychange', v); r(); } document.addEventListener('visibilitychange', v); });
+          await new Promise<void>((r) => { const t = setTimeout(done2, wait); const v = () => { if (!document.hidden) setTimeout(done2, 1500); }; function done2() { clearTimeout(t); document.removeEventListener('visibilitychange', v); r(); } document.addEventListener('visibilitychange', v); });
           if (cancelled) return;
-          const p = await gh.devicePoll(id, dc.device_code);
+          // A failed request (for example no network while the phone switches apps) is not fatal: GitHub keeps the code valid, so just try again.
+          let p: Awaited<ReturnType<typeof gh.devicePoll>>;
+          try { p = await gh.devicePoll(id, dc.device_code); netFails = 0; }
+          catch (e) {
+            if (++netFails >= 40) throw e;
+            status.textContent = 'Waiting for approval… (connection problem, retrying)';
+            continue;
+          }
           if (p.token) {
             await sync.signIn(p.token);
             return finish(true, close);

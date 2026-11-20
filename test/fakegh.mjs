@@ -46,6 +46,7 @@ export function startFake(port = 4599) {
       if (p === '/login/device/code') return send(200, { device_code: 'dev123', user_code: 'ABCD-1234', verification_uri: 'http://localhost:' + port + '/login/device', interval: 1, expires_in: 60 });
       if (p === '/login/oauth/access_token') {
         st.devicePolls++;
+        if (st.devicePolls === 1) return req.socket.destroy(); // connection drops once (phone switching apps)
         if (st.devicePolls <= st.deviceAfter) return send(200, { error: 'authorization_pending' });
         return send(200, { access_token: st.deviceToken, token_type: 'bearer' });
       }
