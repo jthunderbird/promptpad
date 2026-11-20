@@ -4,3 +4,4 @@ dist-single
 release
 src-tauri/target
 src-tauri/gen
+android/app/build/

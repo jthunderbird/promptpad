@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">promptpad</string>
+    <string name="title_activity_main">promptpad</string>
+    <string name="package_name">com.jthunderbird.promptpad</string>
+    <string name="custom_url_scheme">com.jthunderbird.promptpad</string>
+</resources>

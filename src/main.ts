@@ -912,11 +912,11 @@ const isNewer = (a: number[], b: number[]) => {
 
 /** Ask GitHub for the latest release. 'newer' also sets `update` and the Help label. */
 async function checkUpdate(auto: boolean, force = false): Promise<'newer' | 'current' | 'error'> {
-  if (auto && !P.isTauri && !force) return 'current'; // the browser build does not self-check
+  if (auto && !P.isTauri && !P.isAndroid && !force) return 'current'; // the browser build does not self-check
   try {
     const rel = await fetchLatest();
     const tag = String(rel.tag_name ?? '');
-    const asset = (rel.assets ?? []).find((a: any) => /^promptpad-.*\.exe$/.test(a.name));
+    const asset = (rel.assets ?? []).find((a: any) => (P.isAndroid ? /^promptpad-.*\.apk$/ : /^promptpad-.*\.exe$/).test(a.name));
     const next = versionParts(tag);
     const cur = versionParts(pkg.version);
     if (next && cur && asset && isNewer(next, cur)) {
@@ -942,6 +942,14 @@ async function manualUpdateCheck() {
 
 async function installUpdate() {
   if (!update) return;
+  if (P.isAndroid) {
+    const ok = await P.confirmDialog(`Update promptpad ${pkg.version} to ${update.version}?\n\nIt downloads the new version, then Android asks you to confirm the install. Your workspace is saved first.`, 'Update', 'Cancel');
+    if (!ok) return;
+    if (ws.path) await saveWorkspace(false);
+    toast('Downloading update…', 60000);
+    try { await P.installApk(update.url); } catch (e) { toast(String((e as Error).message ?? e), 6000); }
+    return;
+  }
   if (!P.isTauri) { window.open(RELEASES_PAGE, '_blank', 'noopener'); return; }
   if (ws.dirty && !ws.path) { toast('Save your workspace first (File > Save workspace as…), then update', 4000); return; }
   const ok = await P.confirmDialog(
@@ -1007,6 +1015,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'Tab') act(() => switchTab((ws.active + (e.shiftKey ? ws.tabs.length - 1 : 1)) % ws.tabs.length));
 });
 
+void P.onBackground(() => { void sync.syncNow(); });
 void P.onCloseRequested(async () => {
   if (ws.dirty && !ws.path && !(await P.confirmDialog('This workspace has unsaved changes. Quit without saving?', 'Quit', 'Cancel'))) return false;
   if (ws.dirty && ws.path) await saveWorkspace(false);

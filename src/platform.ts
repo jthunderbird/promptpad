@@ -2,6 +2,28 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export const isTauri = '__TAURI_INTERNALS__' in window;
+/** Android app (Capacitor WebView). Paths there look like `app:<relative path>` inside the app's private storage. */
+export const isAndroid = !!(window as any).Capacitor?.isNativePlatform?.();
+const isApp = (p: string) => p.startsWith('app:');
+const appRel = (p: string) => p.slice(4);
+
+async function fsApi() { return (await import('@capacitor/filesystem')); }
+async function appRead(path: string): Promise<string> {
+  const { Filesystem, Directory, Encoding } = await fsApi();
+  return (await Filesystem.readFile({ path: appRel(path), directory: Directory.Data, encoding: Encoding.UTF8 })).data as string;
+}
+async function appWrite(path: string, text: string): Promise<string> {
+  const { Filesystem, Directory, Encoding } = await fsApi();
+  await Filesystem.writeFile({ path: appRel(path), directory: Directory.Data, encoding: Encoding.UTF8, data: text, recursive: true });
+  return (await appSig(path)) ?? '';
+}
+async function appSig(path: string): Promise<string | null> {
+  try {
+    const { Filesystem, Directory } = await fsApi();
+    const st = await Filesystem.stat({ path: appRel(path), directory: Directory.Data });
+    return `${st.mtime}:${st.size}`;
+  } catch { return null; }
+}
 
 export interface Opened { path: string | null; name: string; text: string }
 
@@ -44,6 +66,15 @@ export async function openFile(kind: 'workspace' | 'markdown'): Promise<Opened |
     if (!sel || Array.isArray(sel)) return null;
     return { path: sel, name: base(sel), text: await readText(sel) };
   }
+  if (isAndroid) {
+    // No file path from the Android picker: import a copy into app storage and work on that copy.
+    const r = await pickViaInput('*/*');
+    if (!r) return null;
+    if (kind !== 'workspace') return { path: null, name: r.name, text: r.text };
+    const path = 'app:docs/' + r.name.replace(/[^A-Za-z0-9._ -]+/g, '_');
+    await appWrite(path, r.text);
+    return { path, name: r.name, text: r.text };
+  }
   const w = window as any;
   if (w.showOpenFilePicker) {
     try {
@@ -61,6 +92,7 @@ export async function openFile(kind: 'workspace' | 'markdown'): Promise<Opened |
 
 export async function readText(path: string): Promise<string> {
   if (isTauri) return invoke<string>('read_text', { path });
+  if (isApp(path)) return appRead(path);
   const h = handles.get(path);
   if (!h) throw new Error('no file handle for ' + path);
   return (await h.getFile()).text();
@@ -70,6 +102,7 @@ export async function readText(path: string): Promise<string> {
 export async function fileSig(path: string): Promise<string | null> {
   try {
     if (isTauri) return (await invoke<string | null>('file_sig', { path })) ?? null;
+    if (isApp(path)) return appSig(path);
     const h = handles.get(path);
     if (!h) return null;
     const f = await h.getFile();
@@ -81,6 +114,7 @@ export async function fileSig(path: string): Promise<string | null> {
  *  Returns the file's new signature, or null if there is no target. */
 export async function writeKnown(path: string, text: string): Promise<string | null> {
   if (isTauri) return invoke<string>('write_text', { path, text });
+  if (isApp(path)) return appWrite(path, text);
   const h = handles.get(path);
   if (!h) return null;
   const w = await h.createWritable();
@@ -97,6 +131,21 @@ export async function saveAs(defaultName: string, text: string, kind: 'workspace
     if (!p) return null;
     await invoke('write_text', { path: p, text });
     return p;
+  }
+  if (isAndroid) {
+    if (kind === 'workspace') {
+      const name = window.prompt('File name', defaultName);
+      if (!name) return null;
+      const path = 'app:docs/' + (name.toLowerCase().endsWith('.' + WS_EXT) ? name : name + '.' + WS_EXT).replace(/[^A-Za-z0-9._ -]+/g, '_');
+      await appWrite(path, text);
+      return path;
+    }
+    // Markdown export: hand the file to the Android share sheet (save to Files, send, ...).
+    const { Filesystem, Directory, Encoding } = await fsApi();
+    const f = await Filesystem.writeFile({ path: 'export/' + defaultName, directory: Directory.Cache, encoding: Encoding.UTF8, data: text, recursive: true });
+    const { Share } = await import('@capacitor/share');
+    try { await Share.share({ title: defaultName, files: [f.uri] }); } catch { return null; }
+    return defaultName;
   }
   const w = window as any;
   if (w.showSaveFilePicker) {
@@ -121,6 +170,7 @@ export async function startupPath(): Promise<string | null> {
 }
 
 export async function pathExists(path: string): Promise<boolean> {
+  if (isApp(path)) return (await appSig(path)) !== null;
   return isTauri ? invoke<boolean>('path_exists', { path }) : false;
 }
 
@@ -175,7 +225,7 @@ const TOKEN_LS = 'promptpad.ghtoken';
 export async function getToken(): Promise<string | null> {
   try {
     if (isTauri) return (await invoke<string | null>('secret_get')) ?? null;
-    return localStorage.getItem(TOKEN_LS);
+    return localStorage.getItem(TOKEN_LS); // Android: the WebView's private app storage
   } catch { return null; }
 }
 
@@ -194,19 +244,46 @@ export async function setToken(token: string | null): Promise<void> {
 /** POST JSON to a sign-in endpoint (those do not allow cross-origin requests, so the exe does it in Rust). */
 export async function httpPostJson(url: string, body: string): Promise<string> {
   if (isTauri) return invoke<string>('http_post', { url, body });
+  if (isAndroid) {
+    // The native HTTP layer is not bound by CORS (the sign-in endpoints do not allow it).
+    const { CapacitorHttp } = await import('@capacitor/core');
+    const r = await CapacitorHttp.post({ url, headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: JSON.parse(body) });
+    return typeof r.data === 'string' ? r.data : JSON.stringify(r.data);
+  }
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
   return r.text();
 }
 
 export async function openUrl(url: string): Promise<void> {
   if (isTauri) await invoke('open_url', { url });
+  else if (isAndroid) { const { Browser } = await import('@capacitor/browser'); await Browser.open({ url }); }
   else window.open(url, '_blank', 'noopener');
 }
 
 /** Where promptpad keeps the local copy of a workspace opened from GitHub (exe only). */
 export async function managedPath(repo: string, branch: string, file: string): Promise<string | null> {
+  const safe0 = (x: string) => x.replace(/[^A-Za-z0-9._-]+/g, '_');
+  if (isAndroid) return `app:synced/${safe0(repo)}__${safe0(branch)}__${safe0(file)}`;
   if (!isTauri) return null;
   const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
   const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, '_');
   return join(await appLocalDataDir(), 'synced', `${safe(repo)}__${safe(branch)}__${safe(file)}`);
+}
+
+/** Android: run `cb` when the app goes to the background (it may be killed there, so push edits now). */
+export async function onBackground(cb: () => void): Promise<void> {
+  if (!isAndroid) return;
+  const { App } = await import('@capacitor/app');
+  await App.addListener('pause', cb);
+}
+
+/** Android: download the APK at `url` and open Android's installer. First time, send the user to the permission screen. */
+export async function installApk(url: string): Promise<void> {
+  const { registerPlugin } = await import('@capacitor/core');
+  const A = registerPlugin<{ canInstall(): Promise<{ allowed: boolean }>; openPermissionSettings(): Promise<void>; install(o: { url: string }): Promise<void> }>('ApkInstaller');
+  if (!(await A.canInstall()).allowed) {
+    await A.openPermissionSettings();
+    throw new Error('Allow promptpad to install updates on the screen that just opened, then come back and update again.');
+  }
+  await A.install({ url });
 }

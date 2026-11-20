@@ -62,6 +62,7 @@ jobs:
           node test/sync.mjs ""
           node test/update.mjs ""
           node test/gh.mjs ""
+          node test/soft.mjs ""
 
   html:
     needs: version
@@ -125,8 +126,46 @@ jobs:
           name: exe
           path: promptpad-*.exe
 
+  apk:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Stamp version
+        run: npm version "${{ needs.version.outputs.version }}" --no-git-tag-version --allow-same-version
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build signed APK
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          PP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PP_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          PP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          IFS=. read -r a b c <<< "$v"
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export PP_KEYSTORE="$RUNNER_TEMP/release.jks"
+          export PP_VERSION_NAME="$v"
+          export PP_VERSION_CODE=$(( a * 1000000 + b * 1000 + c ))
+          cd android && ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "../promptpad-${v}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: promptpad-*.apk
+
   release:
-    needs: [version, test, html, exe]
+    needs: [version, test, html, exe, apk]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -126,3 +126,12 @@ attempted.
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+## Android app
+
+Same web UI wrapped with Capacitor (`android/`, app id `com.jthunderbird.promptpad`, Android 8+). Every release carries a signed `promptpad-<version>.apk`; Help > Check for updates downloads the newer APK and opens Android's installer (one confirm tap; the first time Android asks to allow promptpad to install apps).
+
+- Workspaces live in the app's private storage. Open imports a copy of a `.ppad`; Save as stores a copy in the app; markdown export goes through the share sheet. GitHub sync works as on Windows (sign-in through the browser device flow).
+- Soft keyboards send Enter without a usable `keydown`, so `editor.ts` replays it from `beforeinput` (`test/soft.mjs`).
+- The release key is a fixed keystore kept as GitHub Actions secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`promptpad`), `ANDROID_KEY_PASSWORD`. Losing it means users must uninstall and reinstall.
+- Local debug build: `npm run build && npx cap sync android`, then `./gradlew assembleDebug` in `android/` (JDK 21 and the Android SDK; the `mingc/android-build-box` Docker image has both).

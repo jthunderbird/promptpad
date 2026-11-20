@@ -86,13 +86,24 @@ export class Editor {
   private dirty = new Set<number>();
   private editPending: string | null = null;
   private editTimer = 0;
+  private softKey = false;
   dark = false;
 
   constructor(root: HTMLElement, ws: Workspace, hooks: EditorHooks) {
     this.root = root;
     this.ws = ws;
     this.hooks = hooks;
-    root.addEventListener('keydown', (e) => this.onKeyDown(e));
+    root.addEventListener('keydown', (e) => { this.softKey = e.keyCode === 229 || e.key === 'Unidentified'; this.onKeyDown(e); });
+    // Soft keyboards (Android) send Enter as keyCode 229, so keydown cannot see it: replay it from beforeinput.
+    root.addEventListener('beforeinput', (e) => {
+      const ie = e as InputEvent;
+      if (!this.softKey || (ie.inputType !== 'insertParagraph' && ie.inputType !== 'insertLineBreak')) return;
+      this.softKey = false;
+      this.onKeyDown({
+        key: 'Enter', shiftKey: ie.inputType === 'insertLineBreak', ctrlKey: false, metaKey: false, altKey: false,
+        target: ie.target, preventDefault: () => ie.preventDefault(),
+      } as unknown as KeyboardEvent);
+    });
     root.addEventListener('paste', (e) => this.onPaste(e));
     root.addEventListener('click', (e) => this.onClick(e));
   }
