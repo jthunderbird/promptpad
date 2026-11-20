@@ -1,137 +1,98 @@
 # promptpad
 
-A small markdown editor for keeping agentic prompts organized. Think modern Notepad with tabs, plus
-some of what makes VS Code pleasant for markdown: rendered elements you can edit in place, collapsible
-headers, and a copy button on every block.
+**A notepad for the prompts you actually use.** Keep your AI prompts in tabs, edit them as nicely rendered markdown, copy any piece with one click, and keep them in sync across your laptop, work machine and phone through a private GitHub branch.
 
-Windows first, as a single portable `.exe` (Tauri 2, about 5 MB, needs only the WebView2 runtime that ships
-with Windows 10 and 11). The same UI also builds as one self-contained `promptpad.html` for any Chromium browser.
+![promptpad with a code-review prompt: headings, a table, a code example, and sections already sent shown in gray](docs/img/hero.png)
 
-## What it does
+*The demo prompts and repo in these pictures are made up.*
 
-- **Tabs and workspaces.** All tabs live in one readable text file (`.ppad`). Open, save and save as from
-  the File menu. A workspace with a file autosaves in the background without touching your cursor.
-- **Markdown, rendered where you want it.** View > Rendering turns each element type on or off: h1 to h6,
-  paragraphs, bold/italic/inline code, links, images, lists, tables, code blocks, mermaid diagrams, quotes and
-  rules. Rendered and raw elements can mix in one document. Rendered elements are editable in place: click
-  an h2, type, and it stays an h2; table cells edit live; Tab in the last cell adds a row.
-- **Collapsible headers.** Every header folds down to the next header of equal or higher level.
-  Quick change of header level (hover arrows or Alt+Shift+Up/Down) and delete a header with all its
-  content, with confirmation (trash button or Ctrl+Shift+Delete).
-- **Copy button on every block.** A block is the text between blank lines. Copy puts markdown (or plain
-  text, from the Edit menu) on the clipboard, then the block collapses to a gray line with a check. Click to
-  expand, click the x to remove. Heading copy takes the whole section.
-- **Lists continue themselves.** In raw markdown, Enter on a list line adds the next marker, Tab makes a sub
-  bullet, Enter on an empty bullet leaves the list.
-- **Search and outline.** Search box in the tab bar (Ctrl+F) across all tabs; sidebar with outline and find.
-- **Several instances, one file.** Open the same `.ppad` in more than one promptpad, for example on a network
-  share, and they merge each other's changes live (three-way merge by tab id and block; text is never lost,
-  conflicting edits are kept as extra blocks).
-- **GitHub sync (opt-in).** Sign in to GitHub (browser button, or paste a token), then File > Save to GitHub
-  to put a workspace on a branch of one of your repos (a missing branch is created as an orphan branch, so
-  it never touches your real branches) or File > Open from GitHub on another machine. Linked workspaces push
-  about 10 s after you stop typing and pull and merge what other devices pushed (every 15 s and on focus),
-  with the same block-level three-way merge. A sync bar at the right of the menu bar shows the state, a red
-  PUBLIC chip warns about public repos, and a chip counts conflicts (both versions are kept). Talks to the
-  GitHub API directly: no git executable, no clone. See [GitHub sync](#github-sync).
-- Light and dark theme, undo/redo that also covers deletes, import and export of plain `.md`.
+**Download:** [latest release](https://github.com/jthunderbird/promptpad/releases/latest)
 
-## Build
+| You have | Get this file | Notes |
+| --- | --- | --- |
+| Windows 10 or 11 | `promptpad-x.y.z.exe` | One portable file, about 5 MB. Nothing to install. Windows may show a "don't recognize this app" warning because the app is not code-signed yet: choose More info, then Run anyway. |
+| Android 8 or newer | `promptpad-x.y.z.apk` | Open the file on your phone and allow installs from your browser or Files app when asked. Updates install from inside the app. |
+| Anything with Chrome or Edge | `promptpad-x.y.z.html` | A single page you can open from disk. |
 
-```sh
-npm install
-npm run dev                       # browser dev server on :5173
-npm run build                     # frontend into dist/
-SINGLE=1 npx vite build --outDir dist-single   # single-file promptpad.html
-./build-win.sh                    # release/promptpad.exe, cross-compiled in Docker (see below)
-```
+promptpad is in beta. It works, I use it daily, and it will keep changing.
 
-`build-win.sh` cross-compiles for `x86_64-pc-windows-msvc` with `cargo-xwin` inside Docker, so no Windows
-machine or Rust toolchain is needed. It downloads the Windows SDK and CRT from Microsoft on first run
-(accepting Microsoft's license for that download). The WebView2 loader and the C runtime are linked in, so the
-exe has no DLLs beside it. On Windows or Linux with a normal Tauri 2 setup, `npx tauri build --no-bundle` also
-works.
+## Made for prompts
 
-## Test
+### Copy any piece with one click
 
-Tests drive a headless Chromium (Playwright) against the built app:
+Every paragraph, list, table and code block has a copy button. Click it, paste into your chat, and the block folds into a gray line with a check mark so you can see what you have already used. Copy a heading and you get the whole section. Click a gray line to bring the text back.
 
-```sh
-npm run build && npx vite preview --port 4173 &
-node test/smoke.mjs <path-to-chromium>        # rendering, copy, fold, find, workspace
-node test/deep.mjs <path-to-chromium> out.png # tables, lists, bold, mermaid, theme
-node test/notes.mjs <path-to-chromium>        # header levels, list Enter, autosave
-node test/notes2.mjs <path-to-chromium>       # search box, delete header
-node test/sync.mjs <path-to-chromium>         # two instances sharing one file
-node test/update.mjs <path-to-chromium>       # update check, Help label
-node test/gh.mjs <path-to-chromium>           # GitHub sync against a fake GitHub API (starts it on :4599)
-node test/merge.test.mjs                      # merge unit tests, no browser
-rustc --edition 2021 --test src-tauri/src/update.rs -o /tmp/ut && /tmp/ut   # self-update file swap
-rustc --edition 2021 --test src-tauri/src/net.rs -o /tmp/nt && /tmp/nt       # sign-in URL checks
-```
+The "already sent" marks are saved with the file and synced, so they show up on your other devices too.
 
-## GitHub sync
+### Edit rendered, or edit raw, or both
 
-Sync is opt-in: a workspace that is not linked works exactly as before. A linked workspace stores its
-target (`repo`, `branch`, `path`) in its own header, so any machine that opens the file knows where it syncs.
+Markdown looks like markdown where you want it to and like plain text where you don't. In **View > Rendering** you pick which kinds of things are rendered: headings, lists, tables, code, mermaid diagrams and more. Rendered things are still editable in place. **Render all** and **Unrender all** flip everything at once without touching your own choices.
 
-- **Sign in.** File > Sign in to GitHub. Either *Sign in with browser* (GitHub device flow: you get a code,
-  GitHub opens, you approve) or paste a personal access token (fine-grained with Contents read and write on
-  your repo, or a classic token with `repo`). The token is kept in the Windows credential store.
-- **Create / open.** File > Save to GitHub (repo, branch, file name) and File > Open from GitHub. The suggested
-  branch is `promptpad`; everyone using promptpad files in a repo can share that one branch.
-- **What syncs.** Tabs, blocks, the copied flag, copy format and render toggles. The active tab and folded
-  headings are per device and stay out of the file.
-- **Status.** Green *synced*, blue *pending / syncing*, amber *offline* (retries by itself) or *sign in again*.
-  Edits made offline are kept and merged after a restart.
-- **Prompts are committed to git.** Anyone with access to the repo can read them and the history. Do not keep
-  secrets in prompts; the bar warns loudly about public repos.
-- **Browser sign-in** uses promptpad's GitHub OAuth App (public client id built into `src/gh.ts`, device flow
-  enabled). It asks for the `repo` scope, because an OAuth App has no narrower permission for private repos;
-  use a fine-grained token limited to one repo if you want less. To run your own build under another
-  account, register an OAuth App (Settings > Developer settings > OAuth Apps, tick *Enable Device Flow*) and
-  replace `DEFAULT_CLIENT_ID`. Never put a client secret in the app; device flow does not use one.
+![The View menu with the Rendering submenu open](docs/img/rendering-menu.png)
 
-## Updating
+| Rendered | Raw markdown |
+| --- | --- |
+| ![Rendered prompt](docs/img/laptop-synced.png) | ![Same prompt as raw markdown](docs/img/raw.png) |
 
-The exe checks GitHub for a newer release a few seconds after start. When one exists the menu reads
-**Help (Update available)**; Help > Update to x.y.z now downloads the new exe, replaces the running one
-(Windows lets a running exe be renamed) and restarts. The workspace is saved first and reopens afterwards.
-Help > Check for updates checks on demand. Only exe assets of this repository's releases are accepted. The
-exe must live in a folder you can write to.
+### Long prompts stay manageable
 
-## Releases
+Every heading folds away its section. Fold the parts you are not working on, search across all tabs with Ctrl+F, or open the outline sidebar. Change a heading's level with the small arrows, or delete a whole section (after a confirmation).
 
-Every push to `main` runs `.github/workflows/release.yml`: type check and all tests, then a Windows build of
-`promptpad.exe` (native MSVC, static runtime) and the single-file `promptpad.html`, published as a GitHub release
-with both attached. The version is `MAJOR.MINOR` from `package.json` plus an automatic patch number (next free
-`v<MAJOR.MINOR>.N` tag, starting at 1), so the first release is `0.0.1`, then `0.0.2`, and so on. To start a new
-line, change `version` in `package.json` (for example `0.1.0`; the next release is `0.1.1`). The release job
-only runs when the tests pass.
+![Several sections folded away](docs/img/folding.png)
 
-## File format
+### Light and dark
 
-A `.ppad` file is plain text: a first line `<!--promptpad:workspace TOKEN v1-->`, a JSON header (copy format,
-render toggles, optional GitHub link), then each tab after a `<!--promptpad:tab TOKEN {"name":...,"id":...}-->`
-line with its markdown stored verbatim. `TOKEN` is fixed (it only changes if it occurs in the content), so saves produce small diffs. Copied blocks
-carry an invisible `<!--pp:copied-->` marker line. Folded headings and the active tab are per-device view state
-and are not stored in the file (old files with `<!--pp:folded-->` markers still load).
+![Dark theme](docs/img/dark.png)
 
-## Status
+## Your prompts everywhere, with GitHub
 
-Early. Windows behavior (file dialogs, saving to a network share) is checked by hand; the editor, merge and
-sync logic are covered by the tests above. Linux should build with the stock Tauri toolchain; Android is not
-attempted.
+This is the part that makes promptpad useful across devices. Sign in with GitHub, save a workspace to a repository, and open it on any other device. Edits are pushed a few seconds after you stop typing and pulled in on the other side. If two devices edit different parts at the same time, both changes survive. If both edit the same paragraph, both versions are kept and you get a small warning chip.
+
+**The sync bar** at the top right always tells you where things stand: synced, changes pending, offline, or sign-in needed. Work offline as long as you like; it catches up later.
+
+![A workspace on the laptop, the same one on a phone-sized screen. An edit made on the laptop arrived on the phone](docs/img/phone-synced.png)
+
+### Recommended setup: a private `promptpad` branch
+
+You do not need a new repository or a git program. promptpad talks to GitHub directly.
+
+1. **Pick a private repository you already have** (for example your notes or "context" repo), or make a new private one just for prompts.
+2. **Let promptpad use a branch called `promptpad`.** The first save creates it as an empty "orphan" branch, so it never mixes with your code branches and never shows up in your pull requests.
+3. **One file per workspace**, such as `agents.ppad`. Everyone, and every device, can use the same branch.
+
+![The Save to GitHub dialog: repository, branch, file name](docs/img/save-dialog.png)
+
+**On your first device:** File > Sign in to GitHub, then File > Save to GitHub.
+**On every other device:** sign in, then File > Open from GitHub and pick the file. That is all the setup there is.
+
+### Signing in
+
+Click *Sign in with browser*, copy the code, tap *Continue to GitHub*, paste the code, approve, and come back. No passwords or tokens to paste. (Prefer a token? A fine-grained token limited to one repository works too.)
+
+![The sign-in dialog showing a one-time code with Copy and Continue buttons](docs/img/signin.png)
+
+### Keep in mind
+
+- **Your prompts become files in a GitHub repository**, with history, visible to everyone who can see that repository. Use a private repo. promptpad shows a red **PUBLIC** warning in the sync bar if you pick a public one. Keep passwords, keys and other secrets out of your prompts.
+- promptpad asks GitHub for access to your repositories (GitHub offers no narrower setting for private repos through this kind of sign-in). If you want less, use a fine-grained token limited to a single repository instead.
+- Sync is entirely optional. A workspace that is not saved to GitHub is just a local file.
+
+## Also handy
+
+- **Workspaces are plain text files** (`.ppad`) that hold all your tabs. They are easy to back up and compare.
+- **Several windows, one file.** Open the same file twice, even on a network share, and the changes merge.
+- **Lists continue themselves**: Enter adds the next bullet, Tab indents, Enter on an empty bullet ends the list. Enter at the very start of a block pushes it down so you can add something above.
+- **Import and export** plain `.md` files, and choose whether the copy button gives you markdown or plain text.
+- **Self-updating**: the app tells you when a new version is out and installs it for you.
+
+## Feedback
+
+This is a young project and friends' feedback shapes it. [Open an issue](https://github.com/jthunderbird/promptpad/issues) with what is confusing, broken or missing.
+
+## For developers
+
+Build instructions, tests, the release process and the file format are in [docs/DEVELOPING.md](docs/DEVELOPING.md). The app is Tauri 2 plus vanilla TypeScript, with a Capacitor wrapper for Android.
 
 ## License
 
 MIT, see [LICENSE](LICENSE).
-
-## Android app
-
-Same web UI wrapped with Capacitor (`android/`, app id `com.jthunderbird.promptpad`, Android 8+). Every release carries a signed `promptpad-<version>.apk`; Help > Check for updates downloads the newer APK and opens Android's installer (one confirm tap; the first time Android asks to allow promptpad to install apps).
-
-- Workspaces live in the app's private storage. Open imports a copy of a `.ppad`; Save as stores a copy in the app; markdown export goes through the share sheet. GitHub sync works as on Windows (sign-in through the browser device flow).
-- Soft keyboards send Enter without a usable `keydown`, so `editor.ts` replays it from `beforeinput` (`test/soft.mjs`).
-- The release key is a fixed keystore kept as GitHub Actions secrets `ANDROID_KEYSTORE_B64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`promptpad`), `ANDROID_KEY_PASSWORD`. Losing it means users must uninstall and reinstall.
-- Local debug build: `npm run build && npx cap sync android`, then `./gradlew assembleDebug` in `android/` (JDK 21 and the Android SDK; the `mingc/android-build-box` Docker image has both).
