@@ -156,6 +156,13 @@ await sleep(200);
 await shot(A, 'folding');
 await A.evaluate(() => document.querySelectorAll('.block.folded.is-heading .chev').forEach((c) => c.click()));
 
+// the View > Rendering menu: how the hybrid is configured
+await A.click('#menubar .menu:nth-child(3) > button');
+await A.hover('#menubar li[data-label="Rendering"]');
+await sleep(250);
+await shot(A, 'rendering-menu');
+await closeMenus(A);
+
 // save-to-github dialog (on a workspace that is not linked yet)
 const Z = await mk(1180, 760);
 await Z.click('#menubar .menu:nth-child(1) > button');

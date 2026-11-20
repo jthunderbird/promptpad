@@ -33,6 +33,8 @@ The "sent" marks are saved in the file and synced, so a prompt you sent from you
 
 The picture at the top is the point: promptpad is a **hybrid**. Headings, tables and diagrams render so a long document stays easy to scan, while the text that is actually headed for your agent stays raw, exactly the characters it will receive. **View > Rendering** chooses, element by element, what is rendered, and rendered things stay editable in place. **Render all** and **Unrender all** flip everything at once without touching your choices.
 
+![The View menu with the Rendering submenu: pick what renders, element by element](docs/img/rendering-menu.png)
+
 Every heading folds away its section, so you can hide the projects you are not thinking about today. Search across all tabs with Ctrl+F, or open the outline sidebar. Lists continue themselves (Enter adds the next bullet, Tab indents), and Enter at the very start of a block pushes it down so you can add something above it.
 
 ![Sections folded away so only the project you are working on is open](docs/img/folding.png)
