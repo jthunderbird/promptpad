@@ -92,14 +92,24 @@ export function showSignIn(sync: Sync, done: (ok: boolean) => void) {
       go.disabled = true;
       try {
         const dc = await gh.deviceStart(id);
+        // Show the code first and let the user open GitHub when ready (on a phone GitHub replaces this screen).
         codeBox.hidden = false;
         codeBox.textContent = dc.user_code;
-        status.textContent = 'Enter this code at GitHub, then approve. Waiting…';
-        void P.openUrl(dc.verification_uri).catch(() => { status.textContent = `Open ${dc.verification_uri} and enter the code. Waiting…`; });
+        const copy = el('button', { type: 'button' }, 'Copy code');
+        copy.onclick = async () => {
+          try { await navigator.clipboard.writeText(dc.user_code); }
+          catch { const r = document.createRange(); r.selectNodeContents(codeBox); const sl = getSelection(); sl?.removeAllRanges(); sl?.addRange(r); document.execCommand('copy'); }
+          copy.textContent = 'Copied';
+        };
+        const cont = el('button', { class: 'primary', type: 'button' }, 'Continue to GitHub');
+        cont.onclick = () => { void P.openUrl(dc.verification_uri).catch(() => { status.textContent = `Open ${dc.verification_uri} and enter the code. Waiting…`; }); };
+        go.replaceWith(el('div', { class: 'row' }, copy, cont));
+        status.textContent = 'Copy the code, then continue to GitHub and enter it there. Waiting for approval…';
         let wait = Math.max(1, dc.interval || 5) * 1000;
         const deadline = Date.now() + dc.expires_in * 1000;
         while (!cancelled && Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, wait));
+          // also check right away when the user comes back from GitHub
+          await new Promise<void>((r) => { const t = setTimeout(done2, wait); const v = () => { if (!document.hidden) done2(); }; function done2() { clearTimeout(t); document.removeEventListener('visibilitychange', v); r(); } document.addEventListener('visibilitychange', v); });
           if (cancelled) return;
           const p = await gh.devicePoll(id, dc.device_code);
           if (p.token) {
