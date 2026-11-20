@@ -27,6 +27,13 @@ with Windows 10 and 11). The same UI also builds as one self-contained `promptpa
 - **Several instances, one file.** Open the same `.ppad` in more than one promptpad, for example on a network
   share, and they merge each other's changes live (three-way merge by tab id and block; text is never lost,
   conflicting edits are kept as extra blocks).
+- **GitHub sync (opt-in).** Sign in to GitHub (browser button, or paste a token), then File > Save to GitHub
+  to put a workspace on a branch of one of your repos (a missing branch is created as an orphan branch, so
+  it never touches your real branches) or File > Open from GitHub on another machine. Linked workspaces push
+  about 10 s after you stop typing and pull and merge what other devices pushed (every 15 s and on focus),
+  with the same block-level three-way merge. A sync bar at the right of the menu bar shows the state, a red
+  PUBLIC chip warns about public repos, and a chip counts conflicts (both versions are kept). Talks to the
+  GitHub API directly: no git executable, no clone. See [GitHub sync](#github-sync).
 - Light and dark theme, undo/redo that also covers deletes, import and export of plain `.md`.
 
 ## Build
@@ -57,9 +64,32 @@ node test/notes.mjs <path-to-chromium>        # header levels, list Enter, autos
 node test/notes2.mjs <path-to-chromium>       # search box, delete header
 node test/sync.mjs <path-to-chromium>         # two instances sharing one file
 node test/update.mjs <path-to-chromium>       # update check, Help label
+node test/gh.mjs <path-to-chromium>           # GitHub sync against a fake GitHub API (starts it on :4599)
 node test/merge.test.mjs                      # merge unit tests, no browser
 rustc --edition 2021 --test src-tauri/src/update.rs -o /tmp/ut && /tmp/ut   # self-update file swap
+rustc --edition 2021 --test src-tauri/src/net.rs -o /tmp/nt && /tmp/nt       # sign-in URL checks
 ```
+
+## GitHub sync
+
+Sync is opt-in: a workspace that is not linked works exactly as before. A linked workspace stores its
+target (`repo`, `branch`, `path`) in its own header, so any machine that opens the file knows where it syncs.
+
+- **Sign in.** File > Sign in to GitHub. Either *Sign in with browser* (GitHub device flow: you get a code,
+  GitHub opens, you approve) or paste a personal access token (fine-grained, your repo, Contents read and
+  write). The token is kept in the Windows credential store.
+- **Create / open.** File > Save to GitHub (repo, branch, file name) and File > Open from GitHub. The suggested
+  branch is `promptpad`; everyone using promptpad files in a repo can share that one branch.
+- **What syncs.** Tabs, blocks, the copied flag, copy format and render toggles. The active tab and folded
+  headings are per device and stay out of the file.
+- **Status.** Green *synced*, blue *pending / syncing*, amber *offline* (retries by itself) or *sign in again*.
+  Edits made offline are kept and merged after a restart.
+- **Prompts are committed to git.** Anyone with access to the repo can read them and the history. Do not keep
+  secrets in prompts; the bar warns loudly about public repos.
+- **Browser sign-in needs a GitHub App client id.** Register a GitHub App once (Settings > Developer
+  settings > GitHub Apps; enable *Device flow*, give it Repository permission *Contents: Read and write*, no
+  webhook), install it on the repos you use, and put its client id in `DEFAULT_CLIENT_ID` in `src/gh.ts` (or
+  type it once in the sign-in dialog). Without one, use the token option.
 
 ## Updating
 
@@ -80,10 +110,11 @@ only runs when the tests pass.
 
 ## File format
 
-A `.ppad` file is plain text: a first line `<!--promptpad:workspace TOKEN v1-->`, a JSON header (active tab,
-copy format, render toggles), then each tab after a `<!--promptpad:tab TOKEN {"name":...,"id":...}-->`
-line with its markdown stored verbatim. `TOKEN` is random per save and never occurs in the content. Copied and
-folded blocks carry invisible `<!--pp:copied-->` and `<!--pp:folded-->` marker lines.
+A `.ppad` file is plain text: a first line `<!--promptpad:workspace TOKEN v1-->`, a JSON header (copy format,
+render toggles, optional GitHub link), then each tab after a `<!--promptpad:tab TOKEN {"name":...,"id":...}-->`
+line with its markdown stored verbatim. `TOKEN` is fixed (it only changes if it occurs in the content), so saves produce small diffs. Copied blocks
+carry an invisible `<!--pp:copied-->` marker line. Folded headings and the active tab are per-device view state
+and are not stored in the file (old files with `<!--pp:folded-->` markers still load).
 
 ## Status
 

@@ -166,3 +166,47 @@ export async function exitApp() {
 export async function applyUpdate(url: string): Promise<void> {
   await invoke('apply_update', { url });
 }
+
+// ---- GitHub sign-in support ----
+
+const TOKEN_LS = 'promptpad.ghtoken';
+
+/** The GitHub token: OS credential store in the exe, browser storage in the web build. */
+export async function getToken(): Promise<string | null> {
+  try {
+    if (isTauri) return (await invoke<string | null>('secret_get')) ?? null;
+    return localStorage.getItem(TOKEN_LS);
+  } catch { return null; }
+}
+
+export async function setToken(token: string | null): Promise<void> {
+  if (isTauri) {
+    if (token) await invoke('secret_set', { value: token });
+    else await invoke('secret_delete');
+    return;
+  }
+  try {
+    if (token) localStorage.setItem(TOKEN_LS, token);
+    else localStorage.removeItem(TOKEN_LS);
+  } catch { /* ignore */ }
+}
+
+/** POST JSON to a sign-in endpoint (those do not allow cross-origin requests, so the exe does it in Rust). */
+export async function httpPostJson(url: string, body: string): Promise<string> {
+  if (isTauri) return invoke<string>('http_post', { url, body });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body });
+  return r.text();
+}
+
+export async function openUrl(url: string): Promise<void> {
+  if (isTauri) await invoke('open_url', { url });
+  else window.open(url, '_blank', 'noopener');
+}
+
+/** Where promptpad keeps the local copy of a workspace opened from GitHub (exe only). */
+export async function managedPath(repo: string, branch: string, file: string): Promise<string | null> {
+  if (!isTauri) return null;
+  const { appLocalDataDir, join } = await import('@tauri-apps/api/path');
+  const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, '_');
+  return join(await appLocalDataDir(), 'synced', `${safe(repo)}__${safe(branch)}__${safe(file)}`);
+}

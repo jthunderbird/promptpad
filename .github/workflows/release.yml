@@ -44,8 +44,10 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: node test/merge.test.mjs
-      - name: Update helper tests
-        run: rustc --edition 2021 --test src-tauri/src/update.rs -o /tmp/update-tests && /tmp/update-tests
+      - name: Rust helper tests
+        run: |
+          rustc --edition 2021 --test src-tauri/src/update.rs -o /tmp/update-tests && /tmp/update-tests
+          rustc --edition 2021 --test src-tauri/src/net.rs -o /tmp/net-tests && /tmp/net-tests
       - run: npm run build
       - run: npx playwright-core install --with-deps chromium
       - name: Browser tests
@@ -59,6 +61,7 @@ jobs:
           node test/top.mjs ""
           node test/sync.mjs ""
           node test/update.mjs ""
+          node test/gh.mjs ""
 
   html:
     needs: version
@@ -106,6 +109,8 @@ jobs:
           cd src-tauri
           rustc --edition 2021 --test src/update.rs -o update-tests.exe
           ./update-tests.exe
+          rustc --edition 2021 --test src/net.rs -o net-tests.exe
+          ./net-tests.exe
       - run: npm run build
       - name: Build exe
         env:

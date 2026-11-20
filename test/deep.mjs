@@ -47,7 +47,23 @@ await p.evaluate(() => { window.__pp.ws.copyFormat = 'markdown'; });
 // 6 workspace round trip incl. copied + folded flags
 await p.locator('.block.h2 .chev').first().click();
 const rt = await p.evaluate(() => { const pp = window.__pp; const s = pp.serializeWorkspace(pp.ws); const w = pp.parseWorkspace(s); return { s, ok: pp.serializeWorkspace(w).replace(/promptpad:(workspace|tab) [0-9a-f]+/g,'X') === s.replace(/promptpad:(workspace|tab) [0-9a-f]+/g,'X'), copied: w.tabs[0].blocks.some(b=>b.copied), folded: w.tabs[0].blocks.some(b=>b.folded) }; });
-ok(rt.ok, 'workspace serialize -> parse -> serialize is stable'); ok(rt.copied && rt.folded, 'copied+folded flags survive');
+ok(rt.ok, 'workspace serialize -> parse -> serialize is stable'); ok(rt.copied && !rt.folded, 'copied flag survives; folded is per-device and never written to the file');
+const fm = await p.evaluate(() => {
+  const pp = window.__pp;
+  const w = pp.parseWorkspace(pp.serializeWorkspace(pp.ws));
+  const a = pp.serializeWorkspace(w); w.active = 1; const b = pp.serializeWorkspace(w); // active tab is not in the file
+  w.remote = { repo: 'o/r', branch: 'promptpad', path: 'x.ppad' };
+  const c = pp.serializeWorkspace(w); const back = pp.parseWorkspace(c).remote;
+  const legacy = '<!--promptpad:workspace abc12345 v1-->\n{"version":1,"active":1}\n<!--promptpad:tab abc12345 {"name":"T","id":"u1"}-->\n<!--pp:folded-->\n# H\n\ntext\n';
+  const lw = pp.parseWorkspace(legacy);
+  const clash = pp.parseWorkspace('<!--promptpad:workspace pp9f3a1c v1-->\n{}\n<!--promptpad:tab pp9f3a1c {"name":"T","id":"u1"}-->\nx\n');
+  clash.tabs[0].blocks[0].text = '<!--promptpad:tab pp9f3a1c {"name":"evil"}-->';
+  return { same: a === b, remote: back, token: a.split('\n')[0], legacyFolded: lw.tabs[0].blocks[0].folded, legacyActive: lw.active, clashTok: pp.serializeWorkspace(clash).split('\n')[0] };
+});
+ok(fm.same && fm.token === '<!--promptpad:workspace pp9f3a1c v1-->', 'stable token, active tab not in the file');
+ok(fm.remote && fm.remote.repo === 'o/r' && fm.remote.branch === 'promptpad' && fm.remote.path === 'x.ppad', 'GitHub link round-trips through the header');
+ok(fm.legacyFolded === true && fm.legacyActive === 0, 'old files: folded marker still read, old active tab ignored');
+ok(fm.clashTok !== '<!--promptpad:workspace pp9f3a1c v1-->', 'token changes if it occurs in the content');
 console.log(rt.s.split('\n').slice(0, 14).join('\n'));
 
 // 7 mermaid click -> raw -> edit -> back

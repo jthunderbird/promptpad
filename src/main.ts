@@ -6,13 +6,17 @@ import {
   type Tab, type Workspace, headingLevel, joinBlocks, newBlock, newTab, newWorkspace, parseWorkspace, serializeWorkspace,
 } from './model';
 import * as P from './platform';
+import * as gh from './gh';
+import { Sync, linkKey } from './sync';
+import { renderBar, showOpen, showSave, showSignIn } from './ghui';
 import { type MergeResult, type Snap, decodeKey, fileSnap, mergeSnaps, snapOf, snapString } from './merge';
 
 // ---------- app settings (per machine, not in the workspace) ----------
-interface Settings { theme: 'light' | 'dark' | 'system'; sidebar: boolean; last: string | null }
+/** `active` and `folds` are per-device view state, keyed by file (path or GitHub link); never written into the workspace file. */
+interface Settings { theme: 'light' | 'dark' | 'system'; sidebar: boolean; last: string | null; active: Record<string, string>; folds: Record<string, Record<string, string[]>> }
 const SKEY = 'promptpad.settings';
 function loadSettings(): Settings {
-  const d: Settings = { theme: 'system', sidebar: false, last: null };
+  const d: Settings = { theme: 'system', sidebar: false, last: null, active: {}, folds: {} };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SKEY) ?? '{}') }; } catch { return d; }
 }
 const settings = loadSettings();
@@ -108,6 +112,7 @@ function updateTitle() {
 let editVersion = 0;
 let statusTimer = 0;
 let recoveryTimer = 0;
+let viewTimer = 0;
 let autosaveMax = 0;
 let writer: (path: string, text: string) => Promise<string | null> = P.writeKnown;
 
@@ -122,6 +127,9 @@ function markDirty() {
     statusTimer = window.setTimeout(updateTitle, 400);
   }
   if (ws.path && !ws.path.startsWith('download:')) scheduleAutosave();
+  clearTimeout(viewTimer);
+  viewTimer = window.setTimeout(saveView, 500);
+  sync.noteChange();
   if (!ws.path) {
     clearTimeout(recoveryTimer);
     recoveryTimer = window.setTimeout(stashRecovery, 1500);
@@ -253,6 +261,43 @@ const serial = <T>(fn: () => Promise<T>): Promise<T> => {
   return p;
 };
 
+// ---------- per-device view state (active tab, folded headings) ----------
+function viewKey(): string | null {
+  return ws.remote ? linkKey(ws.remote) : ws.path && !ws.path.startsWith('download:') ? ws.path : null;
+}
+
+function restoreView() {
+  const k = viewKey();
+  if (!k) return;
+  const au = settings.active[k];
+  if (au) {
+    const i = ws.tabs.findIndex((t) => t.uid === au);
+    if (i >= 0) ws.active = i;
+  }
+  const f = settings.folds[k];
+  if (f) {
+    for (const t of ws.tabs) {
+      const set = f[t.uid];
+      if (set) for (const b of t.blocks) if (headingLevel(b.text) && set.includes(b.text)) b.folded = true;
+    }
+  }
+}
+
+function saveView() {
+  const k = viewKey();
+  if (!k) return;
+  const folds: Record<string, string[]> = {};
+  for (const t of ws.tabs) {
+    const hs = t.blocks.filter((b) => b.folded && headingLevel(b.text)).map((b) => b.text);
+    if (hs.length) folds[t.uid] = hs;
+  }
+  const au = ws.tabs[ws.active]?.uid;
+  if (settings.active[k] === au && JSON.stringify(settings.folds[k] ?? {}) === JSON.stringify(folds)) return;
+  if (au) settings.active[k] = au;
+  settings.folds[k] = folds;
+  saveSettings();
+}
+
 const eqKeys = (a: string[] | undefined, b: string[]) => !!a && a.length === b.length && a.every((x, i) => x === b[i]);
 const blocksFromKeys = (keys: string[]) => {
   const bl = keys.map((k) => { const d = decodeKey(k); return newBlock(d.text, { copied: d.copied, folded: d.folded }); });
@@ -332,6 +377,80 @@ async function pullIfChanged(): Promise<boolean> {
 setInterval(() => { if (ws.path && !document.hidden) void serial(pullIfChanged); }, 2000);
 window.addEventListener('focus', () => { if (ws.path) void serial(pullIfChanged); });
 
+// ---------- GitHub sync ----------
+const sync = new Sync({
+  ws: () => ws,
+  run: serial,
+  flush: () => editor.flushEdit(),
+  apply: (res) => applyMerged(res),
+  touchLocal: () => {
+    if (ws.path && !ws.path.startsWith('download:')) { ws.dirty = true; scheduleAutosave(); updateTitle(); }
+  },
+  toast,
+  changed: () => { renderSyncBar(); syncMenus(); },
+});
+
+function renderSyncBar() {
+  const bar = document.getElementById('syncbar');
+  if (bar) renderBar(bar, sync, { signIn: () => showSignIn(sync, () => {}) });
+}
+
+async function ensureSignedIn(): Promise<boolean> {
+  if (sync.signedIn) return true;
+  return new Promise<boolean>((res) => showSignIn(sync, res));
+}
+
+async function openFromGitHubCmd() {
+  if (!(await ensureSignedIn())) return;
+  showOpen(sync, async (l) => {
+    if (!(await confirmDiscard())) throw new Error('Cancelled');
+    const mp = await P.managedPath(l.repo, l.branch, l.path.split('/').pop() ?? l.path);
+    // a local copy from an earlier visit may hold edits that were never pushed: open that and let sync merge
+    if (mp && (await P.pathExists(mp))) {
+      await loadText(await P.readText(mp), mp);
+      if (!ws.remote) { ws.remote = l; sync.attach(); }
+      return;
+    }
+    const r = await gh.getFile(sync.requireToken(), l);
+    if (r.kind !== 'ok') throw new Error('File not found on GitHub');
+    const next = parseWorkspace(r.text);
+    next.remote = l;
+    sync.seed(l, r.sha, r.text, r.etag);
+    const text = serializeWorkspace(next);
+    if (mp) {
+      await P.writeKnown(mp, text);
+      useWorkspace(next, mp);
+      await rememberSynced(mp, fileSnap(parseWorkspace(text)));
+    } else useWorkspace(next, null);
+  });
+}
+
+async function saveToGitHubCmd() {
+  if (!(await ensureSignedIn())) return;
+  const def = wsName().replace(/\.ppad$/i, '').replace('Untitled workspace', 'workspace') + '.ppad';
+  showSave(sync, def, async (l) => {
+    editor.flushEdit();
+    await serial(() => sync.publish(l));
+    if (!ws.path) {
+      const mp = await P.managedPath(l.repo, l.branch, l.path.split('/').pop() ?? l.path);
+      if (mp) {
+        ws.path = mp;
+        settings.last = mp;
+        saveSettings();
+        await saveWorkspace(false);
+        await rememberSynced(mp, fileSnap(parseWorkspace(serializeWorkspace(ws))));
+      }
+    } else markDirty(); // rewrite the local file with the new link in its header
+    toast('Saved to GitHub');
+  });
+}
+
+function unlinkCmd() {
+  sync.unlink();
+  markDirty();
+  toast('Unlinked from GitHub (the file on GitHub is untouched)');
+}
+
 async function rememberSynced(path: string | null, snap: Snap | null) {
   baseSnap = snap;
   lastSig = path && !path.startsWith('download:') ? await P.fileSig(path) : null;
@@ -344,6 +463,7 @@ function useWorkspace(next: Workspace, path: string | null) {
   editor.ws = ws;
   baseSnap = null;
   lastSig = null;
+  restoreView();
   if (path && !path.startsWith('download:')) settings.last = path;
   else settings.last = null;
   saveSettings();
@@ -352,9 +472,11 @@ function useWorkspace(next: Workspace, path: string | null) {
   syncMenus();
   refreshSide();
   updateTitle();
+  sync.attach();
 }
 
 async function confirmDiscard(): Promise<boolean> {
+  if (ws.remote && sync.signedIn) await sync.syncNow().catch(() => {});
   if (!ws.dirty) return true;
   if (ws.path) { await saveWorkspace(false); return true; }
   return P.confirmDialog('This workspace has unsaved changes. Discard them?', 'Discard', 'Cancel');
@@ -489,6 +611,13 @@ const MENUS: { name: string; items: Item[] }[] = [
       { label: 'Open workspace…', key: 'Ctrl+O', run: () => void openWorkspaceCmd() },
       { label: 'Save workspace', key: 'Ctrl+S', run: () => void saveWorkspace() },
       { label: 'Save workspace as…', key: 'Ctrl+Shift+S', run: () => void saveWorkspaceAs() },
+      { sep: true },
+      { label: 'Open from GitHub…', run: () => void openFromGitHubCmd() },
+      { label: 'Save to GitHub…', hidden: () => !!ws.remote, run: () => void saveToGitHubCmd() },
+      { label: 'Sync with GitHub now', hidden: () => !ws.remote, run: () => void sync.syncNow() },
+      { label: 'Unlink from GitHub', hidden: () => !ws.remote, run: unlinkCmd },
+      { label: 'Sign in to GitHub…', hidden: () => sync.signedIn, run: () => showSignIn(sync, () => {}) },
+      { label: 'Sign out of GitHub', hidden: () => !sync.signedIn, text: () => `Sign out of GitHub${sync.user ? ' (' + sync.user + ')' : ''}`, run: () => void sync.signOut() },
       { sep: true },
       { label: 'Import .md as new tab…', run: () => void importMd() },
       { label: 'Export tab as .md…', run: () => void exportMd() },
@@ -626,6 +755,10 @@ function buildMenus() {
     };
     bar.appendChild(wrap);
   }
+  const sb = document.createElement('div');
+  sb.id = 'syncbar';
+  sb.hidden = true;
+  bar.appendChild(sb);
   document.addEventListener('click', closeAll);
   window.addEventListener('blur', closeAll);
 }
@@ -875,14 +1008,17 @@ window.addEventListener('keydown', (e) => {
 });
 
 void P.onCloseRequested(async () => {
-  if (!ws.dirty) return true;
-  if (ws.path) { await saveWorkspace(false); return true; }
-  return P.confirmDialog('This workspace has unsaved changes. Quit without saving?', 'Quit', 'Cancel');
+  if (ws.dirty && !ws.path && !(await P.confirmDialog('This workspace has unsaved changes. Quit without saving?', 'Quit', 'Cancel'))) return false;
+  if (ws.dirty && ws.path) await saveWorkspace(false);
+  // push what was typed in the last few seconds (but never hold the window open for long)
+  if (ws.remote && sync.signedIn) await Promise.race([sync.syncNow().catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);
+  return true;
 }, () => ws.dirty);
 
 setTimeout(() => void checkUpdate(true), 3000);
 
 (async function start() {
+  await sync.init();
   editor.dark = false;
   applyTheme();
   syncMenus();
@@ -918,4 +1054,4 @@ setTimeout(() => void checkUpdate(true), 3000);
 })();
 
 
-(window as any).__pp = { get ws() { return ws; }, editor, setWriter: (w: typeof writer) => { writer = w; }, saveWorkspace, pullNow: () => serial(pullIfChanged), snapStr: () => snapString(fileSnap(ws)), setPath: (p: string) => { ws.path = p; }, serializeWorkspace, parseWorkspace, joinBlocks, checkUpdate, isNewer, versionParts, setFetchLatest: (f: typeof fetchLatest) => { fetchLatest = f; } };
+(window as any).__pp = { get ws() { return ws; }, editor, setWriter: (w: typeof writer) => { writer = w; }, saveWorkspace, pullNow: () => serial(pullIfChanged), snapStr: () => snapString(fileSnap(ws)), setPath: (p: string) => { ws.path = p; }, serializeWorkspace, parseWorkspace, joinBlocks, checkUpdate, isNewer, versionParts, setFetchLatest: (f: typeof fetchLatest) => { fetchLatest = f; }, sync, serial, markDirty };

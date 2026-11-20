@@ -9,8 +9,9 @@
 // same blocks, the remote version wins and the local blocks are kept after it: text is never lost.
 import { type Workspace, splitBlocks } from './model';
 
-export const keyOf = (text: string, copied: boolean, folded: boolean) => (copied ? '1' : '0') + (folded ? '1' : '0') + '|' + text;
-export const decodeKey = (k: string) => ({ copied: k[0] === '1', folded: k[1] === '1', text: k.slice(3) });
+// `folded` is per-device view state: it is accepted for compatibility but never part of a block's identity.
+export const keyOf = (text: string, copied: boolean, _folded = false) => (copied ? '1' : '0') + '0|' + text;
+export const decodeKey = (k: string) => ({ copied: k[0] === '1', folded: false, text: k.slice(3) });
 
 export interface SnapTab { uid: string; name: string; keys: string[] }
 export interface Snap {
