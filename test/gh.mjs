@@ -116,6 +116,18 @@ const both = async (p) => { const t = await allText(p); return t.includes('[A2]'
 ok(await until(async () => (await both(A)) && (await both(B)) && FILE().includes('[A2]') && FILE().includes('[B2]'), 12000), 'simultaneous edits to different blocks both survive on both devices');
 ok(await until(async () => (await A.evaluate(() => window.__pp.snapStr())) === (await B.evaluate(() => window.__pp.snapStr())), 6000), 'A and B converge to identical content');
 
+// ---- blame: who changed which block ----
+const who = (p, t) => p.evaluate((t) => [...document.querySelectorAll('.block')].find((b) => b.textContent.includes(t))?.querySelector('.blame b')?.textContent ?? '', t);
+ok(await until(async () => (await who(A, '[A2]')) === '@alice' && (await who(A, '[B2]')) === '@bob', 10000), 'blame labels: A2 block is alice\'s, B2 block is bob\'s (on alice\'s device)');
+ok(await until(async () => (await who(B, '[A2]')) === '@alice' && (await who(B, '[B2]')) === '@bob', 10000), 'blame labels are the same on bob\'s device');
+ok((await A.evaluate(() => [...document.querySelectorAll('.block')].find((b) => b.textContent.includes('[B2]')).title)).includes('Last changed by @bob'), 'hover tooltip names the author');
+ok(!(await A.evaluate(() => getComputedStyle(document.querySelector('.blame')).display !== 'none')), 'labels hidden until Show blame is on');
+await A.click('#menubar .menu:nth-child(3) > button'); await A.click('#menubar li[data-label^="Show blame"]'); await A.keyboard.press('Escape'); await A.mouse.click(1050, 780);
+ok(await A.evaluate(() => getComputedStyle([...document.querySelectorAll('.blame')][0]).display !== 'none'), 'View > Show blame shows the labels');
+await typeIn(A, 'retry up to 3', ' [A2b]');
+ok(await until(async () => (await who(A, '[A2b]')) !== '', 3000), 'an edit not pushed yet is labeled right away');
+await A.click('#menubar .menu:nth-child(3) > button'); await A.click('#menubar li[data-label^="Show blame"]'); await A.keyboard.press('Escape'); await A.mouse.click(1050, 780);
+
 // ---- same block edited on both sides: both versions kept, loudly ----
 await typeIn(A, 'Keep the public API', ' [A3]'); await typeIn(B, 'Keep the public API', ' [B3]');
 ok(await until(async () => { const ta = await allText(A), tb = await allText(B); return ta.includes('[A3]') && ta.includes('[B3]') && tb.includes('[A3]') && tb.includes('[B3]'); }, 12000), 'same-block conflict keeps both versions on both devices');

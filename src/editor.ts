@@ -14,6 +14,8 @@ export interface EditorHooks {
   resolveSrc(href: string): string; // image path -> loadable URL
   toast(msg: string): void;
   confirm(message: string, okLabel: string): Promise<boolean>;
+  /** Who last changed the block with this key (n-th identical block in the tab), or null when unknown. */
+  blame?(tab: Tab, key: string, occurrence: number): { who: string; when: string; title: string } | null;
 }
 
 const MAX_HISTORY = 300;
@@ -125,6 +127,35 @@ export class Editor {
     tail.title = 'Click to add a block';
     this.root.appendChild(tail);
     this.applyFolds();
+    this.refreshBlame();
+  }
+
+  /** Put the small "who changed this" label on every block (shown with View > Show blame; always a hover tooltip). */
+  refreshBlame() {
+    if (!this.hooks.blame) return;
+    const seen = new Map<string, number>();
+    for (const b of this.tab.blocks) {
+      const el = this.els.get(b.id);
+      if (!el || !b.text.trim()) continue;
+      const k = keyOf(b.text, b.copied);
+      const occ = seen.get(k) ?? 0;
+      seen.set(k, occ + 1);
+      const info = this.hooks.blame(this.tab, k, occ);
+      const sig = info ? info.who + '|' + info.when : '';
+      if ((el.dataset.blame ?? '') === sig && el.querySelector('.blame') !== null === !!info) continue;
+      el.querySelector('.blame')?.remove();
+      el.dataset.blame = sig;
+      el.title = info?.title ?? '';
+      if (!info) continue;
+      const tag = document.createElement('span');
+      tag.className = 'blame';
+      tag.innerHTML = '<b></b><i></i>';
+      tag.firstElementChild!.textContent = info.who;
+      tag.lastElementChild!.textContent = info.when;
+      const line = el.querySelector('.copied-line');
+      if (line) line.insertBefore(tag, line.querySelector('.x'));
+      else el.appendChild(tag);
+    }
   }
 
   private blockEl(b: Block): HTMLElement { return this.els.get(b.id)!; }

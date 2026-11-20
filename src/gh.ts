@@ -169,3 +169,24 @@ export async function devicePoll(clientId: string, device: string): Promise<{ to
   if (j.error === 'slow_down') return { wait: 'slow' };
   return { error: j.error_description || j.error || 'Sign-in failed' };
 }
+
+// ---- who changed what (GitHub's blame, via GraphQL: the REST API has none) ----
+
+export interface BlameRange { start: number; end: number; who: string; date: string; sha: string }
+
+export async function getBlame(token: string, link: Link): Promise<BlameRange[]> {
+  const [owner, name] = link.repo.split('/');
+  const r = await call(token, 'POST', '/graphql', {
+    query: 'query($owner:String!,$name:String!,$ref:String!,$path:String!){repository(owner:$owner,name:$name){ref(qualifiedName:$ref){target{... on Commit{blame(path:$path){ranges{startingLine endingLine commit{oid committedDate author{name user{login}}}}}}}}}}',
+    variables: { owner, name, ref: 'refs/heads/' + link.branch, path: link.path },
+  });
+  if (!r.ok) return fail(r);
+  const j = await r.json();
+  const ranges = j?.data?.repository?.ref?.target?.blame?.ranges;
+  if (!Array.isArray(ranges)) throw new GhError('http', 0, j?.errors?.[0]?.message || 'No blame data');
+  return ranges.map((x: any) => ({
+    start: x.startingLine, end: x.endingLine,
+    who: x.commit?.author?.user?.login || x.commit?.author?.name || 'unknown',
+    date: x.commit?.committedDate || '', sha: x.commit?.oid || '',
+  }));
+}

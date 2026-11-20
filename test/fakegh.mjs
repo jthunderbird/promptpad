@@ -17,11 +17,38 @@ export function startFake(port = 4599) {
   st.addRepo = (name, isPrivate = true) => st.repos.set(name, { private: isPrivate, branches: new Map() });
   st.file = (repo, branch, path) => st.repos.get(repo)?.branches.get(branch)?.files.get(path)?.content;
   st.commits = (repo, branch) => st.repos.get(repo)?.branches.get(branch)?.commits ?? [];
-  st.setFile = (repo, branch, path, content, author = 'bob') => {
+  const record = (b, path, content, author, date) => {
+    b.history ??= new Map();
+    if (!b.history.has(path)) b.history.set(path, []);
+    b.history.get(path).push({ content, author, date: date ?? new Date().toISOString(), oid: sha1(content + author + Math.random()) });
+  };
+  st.setFile = (repo, branch, path, content, author = 'bob', date) => {
     const b = st.repos.get(repo).branches.get(branch);
     b.files.set(path, { content, sha: sha1(content) });
     b.commits.push({ message: 'external edit', parents: [1], author });
+    record(b, path, content, author, date);
   };
+  // line owners through the history (simple LCS diff between consecutive versions)
+  const blame = (b, path) => {
+    const hist = b.history?.get(path) ?? [];
+    let prev = [], owners = [];
+    for (const v of hist) {
+      const lines = v.content.split('\n');
+      const n = prev.length, m = lines.length;
+      const L = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+      for (let i = n - 1; i >= 0; i--) for (let k = m - 1; k >= 0; k--) L[i][k] = prev[i] === lines[k] ? L[i + 1][k + 1] + 1 : Math.max(L[i + 1][k], L[i][k + 1]);
+      const next = new Array(m).fill(null);
+      let i = 0, k = 0;
+      while (i < n && k < m) {
+        if (prev[i] === lines[k]) { next[k] = owners[i]; i++; k++; }
+        else if (L[i + 1][k] >= L[i][k + 1]) i++; else k++;
+      }
+      owners = next.map((o) => o ?? v);
+      prev = lines;
+    }
+    return owners; // one history entry per line
+  };
+
 
   const srv = http.createServer((req, res) => {
     if (st.down) return req.destroy();
@@ -58,6 +85,20 @@ export function startFake(port = 4599) {
       if (p === '/user/repos') return send(200, [...st.repos].map(([full_name, r]) => ({ full_name, private: r.private })));
 
       let m;
+      if (p === '/graphql' && req.method === 'POST') {
+        st.graphql = (st.graphql ?? 0) + 1;
+        const v = j.variables || {};
+        const b = st.repos.get(v.owner + '/' + v.name)?.branches.get(String(v.ref).replace('refs/heads/', ''));
+        if (!b) return send(200, { data: { repository: { ref: null } } });
+        const owners = blame(b, v.path);
+        const ranges = [];
+        owners.forEach((o, i) => {
+          const last = ranges[ranges.length - 1];
+          if (last && last.oid === o.oid) last.endingLine = i + 1;
+          else ranges.push({ oid: o.oid, startingLine: i + 1, endingLine: i + 1, commit: { oid: o.oid, committedDate: o.date, author: { name: o.author, user: { login: o.author } } } });
+        });
+        return send(200, { data: { repository: { ref: { target: { blame: { ranges } } } } } });
+      }
       if ((m = /^\/repos\/([^/]+\/[^/]+)$/.exec(p))) {
         const r = st.repos.get(m[1]); if (!r) return send(404, { message: 'Not Found' });
         return send(200, { full_name: m[1], private: r.private });
@@ -92,6 +133,7 @@ export function startFake(port = 4599) {
           const f = { content, sha: sha1(content) };
           b.files.set(path, f);
           b.commits.push({ message: j.message, parents: [1], author: user });
+          record(b, path, content, user);
           st.puts++;
           return send(cur ? 200 : 201, { content: { sha: f.sha } });
         }
@@ -108,7 +150,9 @@ export function startFake(port = 4599) {
           const c = repo.tmp.commits.get(j.sha); const name = j.ref.replace('refs/heads/', '');
           if (repo.branches.has(name)) return send(422, { message: 'Reference already exists' });
           const files = new Map(); for (const e of repo.tmp.trees.get(c.tree)) files.set(e.path, { content: repo.tmp.blobs.get(e.sha), sha: e.sha });
-          repo.branches.set(name, { commits: [{ message: c.message, parents: c.parents, author: user }], files });
+          const nb = { commits: [{ message: c.message, parents: c.parents, author: user }], files };
+          for (const [fp, f] of files) record(nb, fp, f.content, user);
+          repo.branches.set(name, nb);
           return send(201, { ref: j.ref });
         }
       }

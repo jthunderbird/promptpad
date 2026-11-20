@@ -7,16 +7,17 @@ import {
 } from './model';
 import * as P from './platform';
 import * as gh from './gh';
+import { ago } from './blame';
 import { Sync, linkKey } from './sync';
 import { renderBar, showOpen, showSave, showSignIn } from './ghui';
 import { type MergeResult, type Snap, decodeKey, fileSnap, mergeSnaps, snapOf, snapString } from './merge';
 
 // ---------- app settings (per machine, not in the workspace) ----------
 /** `active` and `folds` are per-device view state, keyed by file (path or GitHub link); never written into the workspace file. */
-interface Settings { theme: 'light' | 'dark' | 'system'; sidebar: boolean; last: string | null; active: Record<string, string>; folds: Record<string, Record<string, string[]>> }
+interface Settings { theme: 'light' | 'dark' | 'system'; sidebar: boolean; blame: boolean; last: string | null; active: Record<string, string>; folds: Record<string, Record<string, string[]>> }
 const SKEY = 'promptpad.settings';
 function loadSettings(): Settings {
-  const d: Settings = { theme: 'system', sidebar: false, last: null, active: {}, folds: {} };
+  const d: Settings = { theme: 'system', sidebar: false, blame: false, last: null, active: {}, folds: {} };
   try { return { ...d, ...JSON.parse(localStorage.getItem(SKEY) ?? '{}') }; } catch { return d; }
 }
 const settings = loadSettings();
@@ -83,6 +84,8 @@ function toast(msg: string, ms = 1800) {
   clearTimeout((toast as any)._t);
   (toast as any)._t = setTimeout(() => (t.hidden = true), ms);
 }
+
+function applyBlame() { document.body.classList.toggle('show-blame', settings.blame); }
 
 function applyTheme() {
   const dark = settings.theme === 'dark' || (settings.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -387,7 +390,7 @@ const sync = new Sync({
     if (ws.path && !ws.path.startsWith('download:')) { ws.dirty = true; scheduleAutosave(); updateTitle(); }
   },
   toast,
-  changed: () => { renderSyncBar(); syncMenus(); },
+  changed: () => { renderSyncBar(); syncMenus(); editor?.refreshBlame(); },
 });
 
 function renderSyncBar() {
@@ -666,6 +669,7 @@ const MENUS: { name: string; items: Item[] }[] = [
         ],
       },
       { sep: true },
+      { label: 'Show blame (who changed each block)', check: () => settings.blame, keepOpen: true, run: () => { settings.blame = !settings.blame; saveSettings(); applyBlame(); syncMenus(); } },
       { label: 'Sidebar (outline / find)', key: 'Ctrl+\\', check: () => !$('#sidebar').hidden, keepOpen: true, run: () => toggleSidebar() },
       { label: 'Collapse all headers', run: () => editor.setAllFolds(true) },
       { label: 'Expand all headers', run: () => editor.setAllFolds(false) },
@@ -963,7 +967,13 @@ async function installUpdate() {
 
 // ---------- wiring ----------
 editor = new Editor($('#doc'), ws, {
-  onChange: () => { markDirty(); if (!$('#sidebar').hidden) refreshSideDebounced(); },
+  blame: (tab, key, occ) => {
+    if (!sync.link) return null;
+    const i = sync.blameFor(tab.uid, key, occ);
+    if (!i) return sync.state === 'off' || !sync.signedIn ? null : { who: sync.user ? '@' + sync.user : 'you', when: 'not pushed yet', title: 'Changed here, not pushed to GitHub yet' };
+    return { who: '@' + i.who, when: ago(i.date), title: `Last changed by @${i.who}, ${ago(i.date)}` };
+  },
+  onChange: () => { markDirty(); editor.refreshBlame(); if (!$('#sidebar').hidden) refreshSideDebounced(); },
   toast,
   confirm: (m, ok) => P.confirmDialog(m, ok, 'Cancel'),
   resolveSrc: (href) => {
@@ -1030,6 +1040,7 @@ setTimeout(() => void checkUpdate(true), 3000);
   await sync.init();
   editor.dark = false;
   applyTheme();
+  applyBlame();
   syncMenus();
   if (settings.sidebar) toggleSidebar(true);
   const arg = await P.startupPath();

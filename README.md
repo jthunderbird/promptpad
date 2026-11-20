@@ -2,7 +2,7 @@
 
 **Get your AI prompts ready before you send them.** promptpad is where the prompts you have not sent yet live: one tab per project (or group of projects), a block per task, editable until the moment you copy it into your AI chat. Then it keeps all of that in sync between your laptop, your work machine and your phone, through a private branch on your own GitHub.
 
-![A promptpad tab holding prompts for two side projects: sent prompts are gray lines with a check, unsent ones are ready to edit](docs/img/hero.png)
+![A promptpad tab: a rendered diagram above the raw prompt that will go to the agent; a prompt that was already sent is a gray line](docs/img/hero.png)
 
 *The projects, prompts and repo in these pictures are made up.*
 
@@ -31,21 +31,11 @@ The "sent" marks are saved in the file and synced, so a prompt you sent from you
 
 ### Editing that stays out of the way
 
-Markdown looks like markdown where you want it and like plain text where you don't. **View > Rendering** chooses which kinds of things are rendered (headings, lists, tables, code, diagrams, and more), and rendered things stay editable in place. **Render all** and **Unrender all** flip everything at once without touching your own choices.
-
-![The View menu with the Rendering submenu open](docs/img/rendering-menu.png)
-
-| Rendered | Raw markdown |
-| --- | --- |
-| ![The tab rendered](docs/img/laptop-synced.png) | ![The same tab as raw markdown](docs/img/raw.png) |
+The picture at the top is the point: promptpad is a **hybrid**. Headings, tables and diagrams render so a long document stays easy to scan, while the text that is actually headed for your agent stays raw, exactly the characters it will receive. **View > Rendering** chooses, element by element, what is rendered, and rendered things stay editable in place. **Render all** and **Unrender all** flip everything at once without touching your choices.
 
 Every heading folds away its section, so you can hide the projects you are not thinking about today. Search across all tabs with Ctrl+F, or open the outline sidebar. Lists continue themselves (Enter adds the next bullet, Tab indents), and Enter at the very start of a block pushes it down so you can add something above it.
 
 ![Sections folded away so only the project you are working on is open](docs/img/folding.png)
-
-There is a dark theme too.
-
-![Dark theme](docs/img/dark.png)
 
 ## Your prompts everywhere, with GitHub
 
@@ -63,37 +53,35 @@ No new repository and no git program needed; promptpad talks to GitHub directly.
 
 ![The Save to GitHub dialog: repository, branch, file name](docs/img/save-dialog.png)
 
-**First device:** File > Sign in to GitHub, then File > Save to GitHub.
-**Every other device:** sign in, then File > Open from GitHub and pick the file. That is all the setup there is.
-
-**Signing in** is one button: copy the code, tap *Continue to GitHub*, paste the code, approve, come back. No passwords or tokens to paste. (If you prefer, a fine-grained token limited to one repository also works.)
-
-![The sign-in dialog showing a one-time code with Copy and Continue buttons](docs/img/signin.png)
-
 ### On your phone
 
 The Android app is the same promptpad, with the same GitHub sync, so the prompt you thought of on the couch is waiting in your editor at your desk.
 
 1. Install the `.apk` from the releases page.
-2. Sign in the same way (copy the code, continue to GitHub, paste, approve, come back).
-3. File > Open from GitHub, and pick your file.
+2. Sign in to GitHub, then File > Open from GitHub, and pick your file.
 
 Edits are sent when you pause typing and again whenever you leave the app, so switching to your browser or locking the phone does not strand changes on the phone. Tap a block to show its copy and delete buttons. If you would rather keep a file on the phone alone, File > Open imports a copy of a `.ppad`, and File > Save as keeps one inside the app.
 
-![The same workspace on a phone-sized screen, with an edit that was just typed on the laptop](docs/img/phone-synced.png)
+<img src="docs/img/phone-synced.png" alt="The same workspace on a phone-sized screen, with an edit that was just typed on the laptop" width="240">
 
 *(This picture is a phone-sized browser window, not a photo of a device.)*
 
 ### Working with a team
 
-Several people can use the same file, and the merge is by block, so two people adding different prompts at the same time do not clobber each other. promptpad assumes what a good team does anyway: one person works on a given prompt at a time. So if you edit a prompt that someone else just sent (or the other way round), promptpad keeps both versions and shows a conflict chip instead of quietly picking one. That is on purpose: it means your workflow overlapped.
+Several people can share one file, and the merge is by block, so two people adding different prompts at the same time do not clobber each other. promptpad assumes what a good team does anyway: one person works on a given prompt at a time. If you edit a prompt that someone else just sent (or the other way round), promptpad keeps both versions and shows a conflict chip instead of quietly picking one. That is on purpose: it means your workflow overlapped.
 
-A few habits that work well:
-- Share one branch (`promptpad`) in the team repo, and one `.ppad` file per team or per project group.
-- Everyone signs in with their own GitHub account and needs write access to that repo.
-- Give each person's work its own tab or heading.
+Share one branch (`promptpad`) in the team repo, one `.ppad` file per team or project group, and everyone signs in with their own GitHub account (each needs write access to the repo).
 
-**Who changed what.** Every push is a commit made by the person who edited, so GitHub's *History* and *Blame* views for the `.ppad` file on the `promptpad` branch show who wrote each line. **Blame inside promptpad itself (a small author mark on each block) is not built yet.** It is planned, not promised.
+#### Who changed what: blame
+
+Turn on **View > Show blame** and every block shows who last changed it and when. Hover any block for the same thing as a tooltip, with blame off.
+
+![Show blame: each block is labeled with the person who last changed it and how long ago](docs/img/blame.png)
+
+- The label is the last person to touch the block, whether they edited the text or sent it (copied it).
+- It comes from GitHub's own blame of the synced file, so it covers everything on the branch, not just this session. promptpad fetches it again whenever the file changes on GitHub.
+- Your own edits that have not been pushed yet are labeled "not pushed yet" until they sync.
+- It needs a workspace that is saved to GitHub, and everyone editing under their own account for the names to mean something.
 
 ### Keep in mind
 

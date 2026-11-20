@@ -94,6 +94,10 @@ target (`repo`, `branch`, `path`) in its own header, so any machine that opens t
   account, register an OAuth App (Settings > Developer settings > OAuth Apps, tick *Enable Device Flow*) and
   replace `DEFAULT_CLIENT_ID`. Never put a client secret in the app; device flow does not use one.
 
+## Blame
+
+View > Show blame labels every block with who last changed it (hover tooltip is always on). `gh.getBlame` asks GitHub's GraphQL blame for the synced file; `src/blame.ts` walks the file text like the parser to get each block's line span and maps blame ranges onto blocks (latest change among a block's lines, including its `<!--pp:copied-->` marker line). `Sync.refreshBlame` refetches whenever the remote sha changes; failures are ignored. `test/fakegh.mjs` implements `/graphql` blame by diffing per-file history; `test/gh.mjs` covers labels on two devices, the tooltip, the menu toggle and the "not pushed yet" label.
+
 ## Updating
 
 The exe checks GitHub for a newer release a few seconds after start. When one exists the menu reads

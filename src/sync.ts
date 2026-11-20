@@ -9,6 +9,7 @@
 import * as gh from './gh';
 import * as P from './platform';
 import { type Link, type Workspace, parseWorkspace, serializeWorkspace } from './model';
+import { type BlameInfo, mapBlame } from './blame';
 import { type MergeResult, type Snap, fileSnap, mergeSnaps, snapOf, snapString } from './merge';
 
 export type SyncState = 'off' | 'signedout' | 'pending' | 'syncing' | 'synced' | 'offline' | 'auth' | 'error';
@@ -47,6 +48,10 @@ export class Sync {
   maxMs = 60_000;
   pollMs = 15_000;
 
+  /** Who last changed each block (GitHub blame of the synced file), keyed by tab uid and block key. */
+  blame = new Map<string, BlameInfo[]>();
+  private blameSha = '';
+  private baseText = '';
   private token: string | null = null;
   private base: Base | null = null;
   private idleT = 0;
@@ -86,6 +91,7 @@ export class Sync {
     this.conflicts = 0;
     this.isPublic = false;
     this.base = null;
+    this.blame = new Map(); this.blameSha = ''; this.baseText = '';
     const l = this.link;
     if (!l) return this.set('off');
     const raw = lsGet(BASE_KEY(l));
@@ -93,6 +99,7 @@ export class Sync {
       try {
         const j = JSON.parse(raw);
         this.base = { sha: j.sha ?? null, snap: fileSnap(parseWorkspace(j.text)), etag: j.etag };
+        this.baseText = j.text;
       } catch { /* start without a base */ }
     }
     if (!this.token) return this.set('signedout');
@@ -121,6 +128,25 @@ export class Sync {
     clearTimeout(this.idleT);
     this.idleT = window.setTimeout(() => void this.syncNow(), this.idleMs);
     if (!this.maxT) this.maxT = window.setTimeout(() => void this.syncNow(), this.maxMs);
+  }
+
+  /** Fetch who changed what (one GraphQL call) when the remote file has a new version. Failures are ignored. */
+  async refreshBlame(force = false) {
+    const l = this.link, token = this.token, sha = this.base?.sha;
+    if (!l || !token || !sha || !this.baseText) return;
+    if (!force && sha === this.blameSha) return;
+    const text = this.baseText;
+    try {
+      const ranges = await gh.getBlame(token, l);
+      if (this.base?.sha !== sha) return;
+      this.blame = mapBlame(text, ranges);
+      this.blameSha = sha;
+      this.d.changed();
+    } catch { /* blame is a nicety; keep what we have */ }
+  }
+
+  blameFor(tab: string, key: string, occurrence: number): BlameInfo | null {
+    return this.blame.get(tab + '|' + key)?.[occurrence] ?? null;
   }
 
   dismissConflicts() { this.conflicts = 0; this.d.changed(); }
@@ -220,6 +246,7 @@ export class Sync {
             const res = mergeSnaps(this.base?.snap ?? EMPTY, snapOf(ws), remoteSnap);
             const changed = this.d.apply(res);
             this.base = { sha: r.sha, snap: remoteSnap, etag: r.etag };
+            this.baseText = r.text;
             this.persist(l, r.text, r.sha, r.etag);
             if (res.conflicts) this.conflicts += res.conflicts;
             if (changed) {
@@ -233,6 +260,7 @@ export class Sync {
         try {
           const put = await gh.putFile(token, l, text, missing ? null : this.base?.sha ?? null, 'promptpad: update ' + l.path);
           this.base = { sha: put.sha, snap: fileSnap(parseWorkspace(text)) };
+          this.baseText = text;
           this.persist(l, text, put.sha);
           break;
         } catch (e) {
@@ -242,6 +270,7 @@ export class Sync {
       }
       this.lastSync = Date.now();
       this.set('synced');
+      void this.refreshBlame();
     } catch (e) {
       if (e instanceof gh.GhError) {
         if (e.kind === 'network') this.set('offline', e.message);

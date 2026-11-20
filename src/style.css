@@ -198,3 +198,11 @@ button.sb.chip { cursor: pointer; }
   .block .actions { position: absolute; right: 2px; top: -16px; z-index: 5; padding: 2px; background: var(--bg); border: 1px solid var(--bg3); border-radius: 8px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; }
   .block:focus-within .actions, .block .actions:has(.badge) { opacity: 1; pointer-events: auto; }
 }
+
+/* Blame: who last changed a block. The hover tooltip is always there; the label shows with View > Show blame. */
+.blame { display: none; flex: none; width: 104px; padding: 4px 4px 0 6px; font-size: 11px; line-height: 1.3; color: var(--muted); overflow: hidden; }
+.blame b { display: block; font-weight: 600; color: var(--fg); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blame i { display: block; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.show-blame .blame { display: block; }
+body.show-blame .copied-line .blame { width: auto; display: flex; gap: 6px; padding: 0 6px; margin-left: auto; }
+@media (max-width: 640px) { .blame { width: 72px; } .blame i { display: none; } }
